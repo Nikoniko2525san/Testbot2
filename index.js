@@ -34,7 +34,7 @@ const getUserRole = (userId) => {
 
 app.post("/webhook", async (req, res) => {
     const events = req.body.events;
-    
+
     for (const event of events) {
         if (!event.replyToken || !event.message?.text) continue;
 
@@ -45,40 +45,22 @@ app.post("/webhook", async (req, res) => {
         let replyText = "";
         const userRole = getUserRole(userId);
 
-        // 「おみくじ」コマンドの処理
-        if (userMessage === "おみくじ") {
+        // 「checkメンション」コマンドの処理
+        if (userMessage === "checkメンション" && event.message?.mention) {
+            const mentions = event.message.mention.mentee;  // メンションされたユーザー情報
+            if (mentions && mentions.length > 0) {
+                const mentionUserId = mentions[0].userId;  // 最初のメンション相手のIDを取得
+                replyText = `メンションされたユーザーID: ${mentionUserId}`;
+            } else {
+                replyText = "メンションが見つかりませんでした。";
+            }
+        } 
+        // おみくじコマンド
+        else if (userMessage === "おみくじ") {
             if (userRole === "admin" || userRole === "moderator") {
                 replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
             } else {
                 replyText = "このコマンドを使う権限がありません。";
-            }
-        } 
-        // 簡易権限者を追加
-        else if (userMessage.startsWith("!mod add ")) {
-            if (userRole !== "admin") {
-                replyText = "このコマンドを実行する権限がありません。";
-            } else {
-                const targetUserId = userMessage.replace("!mod add ", "").trim();
-                const permissions = loadPermissions();
-                permissions[targetUserId] = "moderator";
-                savePermissions(permissions);
-                replyText = `ユーザー ${targetUserId} を簡易権限者に追加しました。`;
-            }
-        }
-        // 簡易権限者を削除
-        else if (userMessage.startsWith("!mod remove ")) {
-            if (userRole !== "admin") {
-                replyText = "このコマンドを実行する権限がありません。";
-            } else {
-                const targetUserId = userMessage.replace("!mod remove ", "").trim();
-                const permissions = loadPermissions();
-                if (permissions[targetUserId]) {
-                    delete permissions[targetUserId];
-                    savePermissions(permissions);
-                    replyText = `ユーザー ${targetUserId} の簡易権限を削除しました。`;
-                } else {
-                    replyText = "指定されたユーザーは簡易権限者ではありません。";
-                }
             }
         } else {
             replyText = `あなたのメッセージ: ${userMessage}`;
