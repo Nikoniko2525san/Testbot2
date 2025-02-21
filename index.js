@@ -5,7 +5,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = Cc+w+YEYWfn2tpGDIjWD1mZ3UJFiz1ty/sNbPnl0aipRC0VGzbexMmmj/qUqhf5lBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeTmCEW6VlTaaqur0pQOOx3q6KTgXXIzJHxhiH5CNAu77QdB04t89/1O/w1cDnyilFU=
+const ACCESS_TOKEN = 
 const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 
 // おみくじの結果リスト
@@ -45,17 +45,11 @@ app.post("/webhook", async (req, res) => {
         let replyText = "";
         const userRole = getUserRole(userId);
 
-        // 「checkメンション」コマンドの処理
-        if (userMessage === "checkメンション" && event.message?.mention) {
-            const mentions = event.message.mention.mentee;  // メンションされたユーザー情報
-            if (mentions && mentions.length > 0) {
-                const mentionUserId = mentions[0].userId;  // 最初のメンション相手のIDを取得
-                replyText = `メンションされたユーザーID: ${mentionUserId}`;
-            } else {
-                replyText = "メンションが見つかりませんでした。";
-            }
+        // 「check」コマンドの処理
+        if (userMessage === "check") {
+            replyText = `あなたのユーザーIDは: ${userId}`;
         } 
-        // おみくじコマンド
+        // 「おみくじ」コマンドの処理
         else if (userMessage === "おみくじ") {
             if (userRole === "admin" || userRole === "moderator") {
                 replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
