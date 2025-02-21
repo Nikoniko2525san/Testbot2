@@ -5,7 +5,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = 
+const ACCESS_TOKEN = Cc+w+YEYWfn2tpGDIjWD1mZ3UJFiz1ty/sNbPnl0aipRC0VGzbexMmmj/qUqhf5lBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeTmCEW6VlTaaqur0pQOOx3q6KTgXXIzJHxhiH5CNAu77QdB04t89/1O/w1cDnyilFU=
 const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 
 // おみくじの結果リスト
