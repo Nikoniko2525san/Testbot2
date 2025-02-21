@@ -5,7 +5,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = Cc+w+YEYWfn2tpGDIjWD1mZ3UJFiz1ty/sNbPnl0aipRC0VGzbexMmmj/qUqhf5lBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeTmCEW6VlTaaqur0pQOOx3q6KTgXXIzJHxhiH5CNAu77QdB04t89/1O/w1cDnyilFU=
+const ACCESS_TOKEN =Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU=
 const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 
 // おみくじの結果リスト
