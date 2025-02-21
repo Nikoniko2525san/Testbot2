@@ -1,6 +1,8 @@
 require('dotenv').config();  // dotenvを読み込む
 
-const ACCESS_TOKEN = process.env.LINE_ACCESS_TOKEN;  // 環境変数からトークンを取得
+// ACCESS_TOKENの宣言を一度だけにする
+const ACCESS_TOKEN = process.env.LINE_ACCESS_TOKEN || 'デフォルトのトークンをここに書く';  // 環境変数からトークンを取得、なければデフォルトのトークン
+
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
@@ -8,7 +10,6 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN =Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU=
 const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 
 // おみくじの結果リスト
