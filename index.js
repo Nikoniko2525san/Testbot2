@@ -1,3 +1,6 @@
+require('dotenv').config();  // dotenvを読み込む
+
+const ACCESS_TOKEN = process.env.LINE_ACCESS_TOKEN;  // 環境変数からトークンを取得
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
