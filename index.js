@@ -205,8 +205,8 @@ app.post("/webhook", async (req, res) => {
                     replyText = `スロット結果: ${slotString}`;
                     // すべて同じ数字の場合に勝ち
                     if (slotResult[0] === slotResult[1] && slotResult[1] === slotResult[2]) {
-                        coins[userId] += 10; // 勝ったら10コイン追加
-                        replyText += "\n勝利！ 10コインを獲得しました。";
+                        coins[userId] += 100; // 勝ったら10コイン追加
+                        replyText += "\n勝利！ 100コインを獲得しました。";
                     }
                     saveCoins(coins);
                 }
