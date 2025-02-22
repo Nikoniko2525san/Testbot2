@@ -117,11 +117,6 @@ app.post("/webhook", async (req, res) => {
 
         let replyText = null;
 
-        // メンバー参加時の処理（ID送信）
-        if (event.type === "join") {
-            replyText = `新しいメンバーが参加しました！ID: ${userId}`;
-        }
-
         // メッセージ受信イベント
         if (event.type === "message" && event.message?.text) {
             const userMessage = event.message.text;
