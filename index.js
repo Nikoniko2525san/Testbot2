@@ -108,8 +108,8 @@ app.post("/webhook", async (req, res) => {
             // 「権限一覧」コマンドの処理
             else if (userMessage === "権限一覧") {
                 const rolesDescription = `最高者: 全ての権限が可能
-                権限者: ほとんどの権限が可能
-                非権限者: 普通の人
+権限者: ほとんどの権限が可能
+非権限者: 普通の人
                 `;
                 replyText = rolesDescription;
             }
