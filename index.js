@@ -88,6 +88,13 @@ app.post("/webhook", async (req, res) => {
 
         let replyText = null;
 
+        // メンバーが参加した場合（memberJoinedイベント）
+        if (event.type === "join") {
+            const joinedUserId = event.source.userId;
+            replyText = `新しいメンバーが参加しました！ID: ${joinedUserId}`;
+            await sendReply(replyToken, replyText);
+        }
+
         // メッセージ受信イベント
         if (event.type === "message" && event.message?.text) {
             const messageId = event.message.id;
@@ -120,30 +127,28 @@ app.post("/webhook", async (req, res) => {
                     replyText = "このコマンドを使う権限がありません。";
                 }
             }
-            // 「付与@〇〇」コマンドの処理
-            else if (userMessage.startsWith("付与@") && event.message.mentions && event.message.mentions.length > 0) {
+            // 「付与ID:xxxx」コマンドの処理
+            else if (userMessage.startsWith("付与ID:")) {
                 if (userRole === "最高者") {
-                    const mentions = event.message.mentions;
-                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                    console.log("付与するユーザー:", mentionedUser.userId);  // デバッグ用
+                    const userIdToGrant = userMessage.split(":")[1].trim();  // コロン後のIDを取得
+                    console.log("付与するユーザー:", userIdToGrant);  // デバッグ用
                     const permissions = loadPermissions();
-                    permissions[mentionedUser.userId] = "権限者";  // メンションされたユーザーを権限者に変更
+                    permissions[userIdToGrant] = "権限者";  // 指定したIDを権限者に変更
                     savePermissions(permissions);
-                    replyText = `ユーザー ${mentionedUser.userId} に権限者を付与しました。`;
+                    replyText = `ユーザー ${userIdToGrant} に権限者を付与しました。`;
                 } else {
                     replyText = "このコマンドを使う権限がありません。";
                 }
             }
-            // 「剥奪@〇〇」コマンドの処理
-            else if (userMessage.startsWith("剥奪@") && event.message.mentions && event.message.mentions.length > 0) {
+            // 「剥奪ID:xxxx」コマンドの処理
+            else if (userMessage.startsWith("剥奪ID:")) {
                 if (userRole === "最高者") {
-                    const mentions = event.message.mentions;
-                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                    console.log("剥奪するユーザー:", mentionedUser.userId);  // デバッグ用
+                    const userIdToRevoke = userMessage.split(":")[1].trim();  // コロン後のIDを取得
+                    console.log("剥奪するユーザー:", userIdToRevoke);  // デバッグ用
                     const permissions = loadPermissions();
-                    permissions[mentionedUser.userId] = "非権限者";  // メンションされたユーザーを非権限者に変更
+                    permissions[userIdToRevoke] = "非権限者";  // 指定したIDを非権限者に変更
                     savePermissions(permissions);
-                    replyText = `ユーザー ${mentionedUser.userId} から権限を剥奪しました。`;
+                    replyText = `ユーザー ${userIdToRevoke} から権限を剥奪しました。`;
                 } else {
                     replyText = "このコマンドを使う権限がありません。";
                 }
