@@ -26,9 +26,9 @@ const savePermissions = (data) => {
 
 // 権限を取得する
 const getUserRole = (userId) => {
-    if (userId === adminUserId) return "admin";
+    if (userId === adminUserId) return "最高者";  // 管理者を「最高者」とする
     const permissions = loadPermissions();
-    return permissions[userId] || "user";  // 権限がない場合は"user"
+    return permissions[userId] || "非権限者";  // 権限がない場合は「非権限者」
 };
 
 // メッセージ履歴を読み込む
@@ -114,18 +114,34 @@ app.post("/webhook", async (req, res) => {
             }
             // 「おみくじ」コマンドの処理
             else if (userMessage === "おみくじ") {
-                if (userRole === "admin" || userRole === "moderator") {
+                if (userRole === "最高者" || userRole === "権限者") {
                     replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
                 } else {
                     replyText = "このコマンドを使う権限がありません。";
                 }
             }
-            // 「checkmid」メンションコマンドの処理
-            else if (userMessage.startsWith("checkmid") && event.message.mentions && event.message.mentions.length > 0) {
-                if (userRole === "admin" || userRole === "moderator") {
+            // 「付与@〇〇」コマンドの処理
+            else if (userMessage.startsWith("付与@") && event.message.mentions && event.message.mentions.length > 0) {
+                if (userRole === "最高者") {
                     const mentions = event.message.mentions;
                     const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                    replyText = `メンションされたユーザーのID (mid): ${mentionedUser.userId}`;
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "権限者";  // メンションされたユーザーを権限者に変更
+                    savePermissions(permissions);
+                    replyText = `ユーザー ${mentionedUser.userId} に権限者を付与しました。`;
+                } else {
+                    replyText = "このコマンドを使う権限がありません。";
+                }
+            }
+            // 「剥奪@〇〇」コマンドの処理
+            else if (userMessage.startsWith("剥奪@") && event.message.mentions && event.message.mentions.length > 0) {
+                if (userRole === "最高者") {
+                    const mentions = event.message.mentions;
+                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "非権限者";  // メンションされたユーザーを非権限者に変更
+                    savePermissions(permissions);
+                    replyText = `ユーザー ${mentionedUser.userId} から権限を剥奪しました。`;
                 } else {
                     replyText = "このコマンドを使う権限がありません。";
                 }
