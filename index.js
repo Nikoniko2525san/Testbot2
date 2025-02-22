@@ -225,20 +225,33 @@ app.post("/webhook", async (req, res) => {
                 }
             }
 
-            // 
             // 「Allcoingive:数」コマンドの処理（全員へのコイン付与）
-else if (userMessage.startsWith("Allcoingive:")) {
-    const amount = parseInt(userMessage.split(":")[1]);
+            else if (userMessage.startsWith("Allcoingive:")) {
+                const amount = parseInt(userMessage.split(":")[1]);
 
-    if (!isNaN(amount) && amount > 0 && userRole === "最高者") {
-        const allUsers = Object.keys(coins); // すべてのユーザーIDを取得
-        allUsers.forEach(userId => {
-            coins[userId] = (coins[userId] || 0) + amount; // 各ユーザーにコインを付与
-        });
-        saveCoins(coins);
+                if (!isNaN(amount) && amount > 0 && userRole === "最高者") {
+                    const allUsers = Object.keys(coins); // すべてのユーザーIDを取得
+                    allUsers.forEach(userId => {
+                        coins[userId] = (coins[userId] || 0) + amount; // 各ユーザーにコインを付与
+                    });
+                    saveCoins(coins);
 
-        replyText = `全員に${amount}コインを付与しました。`;
-    } else {
-        replyText = "コイン付与には「最高者」の権限が必要です。";
+                    replyText = `全員に${amount}コインを付与しました。`;
+                } else {
+                    replyText = "コイン付与には「最高者」の権限が必要です。";
+                }
+            }
+
+            // 返信
+            if (replyText) {
+                await sendReply(replyToken, replyText);
+            }
+        }
     }
-}
+});
+
+// サーバーを起動
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
