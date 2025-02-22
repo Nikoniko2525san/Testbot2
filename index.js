@@ -133,16 +133,6 @@ app.post("/webhook", async (req, res) => {
             else if (userMessage === "権限") {
                 replyText = `あなたの権限は: ${userRole}`;
             }
-                // 「おみくじ」コマンドの処理
-        else if (userMessage === "おみくじ") {
-            if (userRole === "admin" || userRole === "moderator") {
-                replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
-            } else {
-                replyText = "このコマンドを使う権限がありません。";
-            }
-        } else {
-            replyText = `あなたのメッセージ: ${userMessage}`;
-        }
             // 「権限一覧」コマンドの処理
             else if (userMessage === "権限一覧") {
                 const rolesDescription = `最高者: 全ての権限が可能
@@ -178,58 +168,6 @@ app.post("/webhook", async (req, res) => {
                 }
             }
 
-            // スロットコマンドの処理
-            else if (userMessage === "スロット") {
-                const userCoins = coins[userId] || 0;
-
-                if (userCoins < 1) {
-                    replyText = "コインが足りません。スロットを回すには1コイン必要です。";
-                } else {
-                    const slot = spinSlot();
-                    const result = checkSlotResult(slot);
-                    let prize = 0;
-
-                    if (result === 777) {
-                        prize = 500;
-                        replyText = `おめでとう！スロット結果: ${slot.join(' ')} -> 500コインゲット！`;
-                    } else if (result === 100) {
-                        prize = 100;
-                        replyText = `スロット結果: ${slot.join(' ')} -> 100コインゲット！`;
-                    } else {
-                        prize = 0;
-                        replyText = `スロット結果: ${slot.join(' ')} -> 残念！`;
-                    }
-
-                    // コインを更新
-                    coins[userId] = (coins[userId] || 0) - 1 + prize;
-                    saveCoins(coins);
-
-                    // 残りコイン数を表示
-                    replyText += `\n残りのコイン数: ${coins[userId]}コイン`;
-                }
-            }
-
-            // 「coingive:ID:数」コマンドの処理（個人へのコイン付与）
-            else if (userMessage.startsWith("coingive:")) {
-                const parts = userMessage.split(":");
-                if (parts.length === 3) {
-                    const targetUserId = parts[1];
-                    const amount = parseInt(parts[2]);
-
-                    if (!isNaN(amount) && amount > 0) {
-                        const userCoins = coins[targetUserId] || 0;
-                        coins[targetUserId] = userCoins + amount;
-                        saveCoins(coins);
-
-                        replyText = `${targetUserId}に${amount}コインを付与しました。`;
-                    } else {
-                        replyText = "無効なコイン数です。";
-                    }
-                } else {
-                    replyText = "コマンドの形式が正しくありません。";
-                }
-            }
-
             // 「Allcoingive:数」コマンドの処理（全員へのコイン付与）
             else if (userMessage.startsWith("Allcoingive:")) {
                 const amount = parseInt(userMessage.split(":")[1]);
@@ -245,6 +183,28 @@ app.post("/webhook", async (req, res) => {
                 } else {
                     replyText = "コイン付与には「最高者」の権限が必要です。";
                 }
+            }
+
+            // 「coingiveID:数」コマンドの処理（個人ユーザーへのコイン付与）
+            else if (userMessage.startsWith("coingiveID:")) {
+                const parts = userMessage.split(":");
+                const targetUserId = parts[1];
+                const amount = parseInt(parts[2]);
+
+                if (!isNaN(amount) && amount > 0) {
+                    coins[targetUserId] = (coins[targetUserId] || 0) + amount;  // 特定ユーザーにコインを付与
+                    saveCoins(coins);
+
+                    replyText = `${targetUserId}に${amount}コインを付与しました。`;
+                } else {
+                    replyText = "コインの数が不正です。";
+                }
+            }
+
+            // 「おみくじ」コマンドの処理
+            else if (userMessage === "おみくじ") {
+                const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+                replyText = `おみくじの結果は「${fortune}」です！`;
             }
 
             // 返信
