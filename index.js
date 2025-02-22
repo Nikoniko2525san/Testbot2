@@ -44,8 +44,29 @@ const saveMessages = (data) => {
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
+    // 最初に200 OKを返す
+    res.sendStatus(200);
+    
     const events = req.body.events;
     const messages = loadMessages(); // メッセージ履歴を読み込む
+
+    // 非同期処理を使ってLINE API呼び出し
+    const sendReply = async (replyToken, replyText) => {
+        try {
+            await axios.post("https://api.line.me/v2/bot/message/reply", {
+                replyToken: replyToken,
+                messages: [{ type: "text", text: replyText }]
+            }, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${ACCESS_TOKEN}`
+                },
+                timeout: 5000 // タイムアウトを5秒に設定
+            });
+        } catch (error) {
+            console.error('エラー発生:', error);
+        }
+    };
 
     for (const event of events) {
         if (!event.replyToken && event.type !== "unsend") continue;
@@ -89,18 +110,10 @@ app.post("/webhook", async (req, res) => {
 
         // 返信メッセージがある場合のみ送信
         if (replyText) {
-            await axios.post("https://api.line.me/v2/bot/message/reply", {
-                replyToken: replyToken,
-                messages: [{ type: "text", text: replyText }]
-            }, {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${ACCESS_TOKEN}`
-                }
-            });
+            // 非同期で返信
+            sendReply(replyToken, replyText);
         }
     }
-    res.sendStatus(200);
 });
 
 // `GET /` エンドポイントの追加
