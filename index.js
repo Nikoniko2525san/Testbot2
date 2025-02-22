@@ -109,8 +109,7 @@ app.post("/webhook", async (req, res) => {
             else if (userMessage === "権限一覧") {
                 const rolesDescription = `最高者: 全ての権限が可能
 権限者: ほとんどの権限が可能
-非権限者: 普通の人
-                `;
+非権限者: 普通の人`;
                 replyText = rolesDescription;
             }
             // 「おみくじ」コマンドの処理
