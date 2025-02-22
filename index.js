@@ -138,6 +138,16 @@ app.post("/webhook", async (req, res) => {
             else if (userMessage === "権限") {
                 replyText = `あなたの権限は: ${userRole}`;
             }
+                // 「おみくじ」コマンドの処理
+        else if (userMessage === "おみくじ") {
+            if (userRole === "admin" || userRole === "moderator") {
+                replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
+            } else {
+                replyText = "このコマンドを使う権限がありません。";
+            }
+        } else {
+            replyText = `あなたのメッセージ: ${userMessage}`;
+        }
             // 「権限一覧」コマンドの処理
             else if (userMessage === "権限一覧") {
                 const rolesDescription = `最高者: 全ての権限が可能
