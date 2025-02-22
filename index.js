@@ -25,35 +25,6 @@ const saveCoins = (data) => {
     fs.writeFileSync(COINS_FILE, JSON.stringify(data, null, 2), "utf-8");
 };
 
-// 権限データを読み込む
-const loadPermissions = () => {
-    if (!fs.existsSync(DATA_FILE)) return {};
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-};
-
-// 権限データを保存する
-const savePermissions = (data) => {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
-};
-
-// 権限を取得する
-const getUserRole = (userId) => {
-    if (userId === adminUserId) return "最高者";  // 管理者を「最高者」とする
-    const permissions = loadPermissions();
-    return permissions[userId] || "非権限者";  // 権限がない場合は「非権限者」
-};
-
-// メッセージ履歴を読み込む
-const loadMessages = () => {
-    if (!fs.existsSync(MESSAGE_LOG)) return {};
-    return JSON.parse(fs.readFileSync(MESSAGE_LOG, "utf-8"));
-};
-
-// メッセージ履歴を保存する
-const saveMessages = (data) => {
-    fs.writeFileSync(MESSAGE_LOG, JSON.stringify(data, null, 2), "utf-8");
-};
-
 // おみくじの結果を定義
 const fortunes = [
     "大吉",
@@ -65,12 +36,11 @@ const fortunes = [
 
 // スロットを回す関数
 const spinSlot = () => {
-    const slot = [
+    return [
         Math.floor(Math.random() * 10),
         Math.floor(Math.random() * 10),
         Math.floor(Math.random() * 10)
     ];
-    return slot;
 };
 
 // スロットの結果を判定する関数
@@ -83,13 +53,10 @@ const checkSlotResult = (slot) => {
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
-    // 最初に200 OKを返す
     res.sendStatus(200);
 
     const events = req.body.events;
     const coins = loadCoins(); // コイン情報を読み込む
-    const permissions = loadPermissions(); // 権限情報を読み込む
-    const messages = loadMessages(); // メッセージ履歴を読み込む
 
     const sendReply = async (replyToken, replyText) => {
         try {
@@ -101,7 +68,7 @@ app.post("/webhook", async (req, res) => {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${ACCESS_TOKEN}`
                 },
-                timeout: 5000 // タイムアウトを5秒に設定
+                timeout: 5000
             });
         } catch (error) {
             console.error('エラー発生:', error);
@@ -109,90 +76,45 @@ app.post("/webhook", async (req, res) => {
     };
 
     for (const event of events) {
-        if (!event.replyToken) continue; // replyTokenがない場合は処理しない
+        if (!event.replyToken) continue; 
 
         const replyToken = event.replyToken;
         const userId = event.source.userId;
-        const userRole = getUserRole(userId);
 
         let replyText = null;
 
-        // メッセージ受信イベント
         if (event.type === "message" && event.message?.text) {
             const userMessage = event.message.text;
 
-            // メッセージを記録
-            messages[event.message.id] = userMessage;
-            saveMessages(messages);
-
-            // 「check」コマンドの処理
-            if (userMessage === "check") {
-                replyText = `あなたのIDは: ${userId}`;
-            } 
-            // 「権限」コマンドの処理
-            else if (userMessage === "権限") {
-                replyText = `あなたの権限は: ${userRole}`;
-            }
-            // 「権限一覧」コマンドの処理
-            else if (userMessage === "権限一覧") {
-                const rolesDescription = `最高者: 全ての権限が可能
-権限者: ほとんどの権限が可能
-非権限者: 普通の人`;
-                replyText = rolesDescription;
-            }
-            // 「権限付与ID:〇〇」コマンドの処理
-            else if (userMessage.startsWith("権限付与ID:")) {
-                if (userRole === "最高者") {
-                    const targetUserId = userMessage.split(':')[1];
-                    const permissionsData = loadPermissions();
-                    permissionsData[targetUserId] = "権限者";  // 権限を付与
-                    savePermissions(permissionsData);
-
-                    replyText = `${targetUserId}に権限者の権限を付与しました。`;
-                } else {
-                    replyText = "権限付与を行うには「最高者」の権限が必要です。";
-                }
+            // コイン確認
+            if (userMessage === "coincheck") {
+                replyText = `あなたのコイン: ${coins[userId] || 0} 枚`;
             }
 
-            // 「権限削除ID:〇〇」コマンドの処理
-            else if (userMessage.startsWith("権限削除ID:")) {
-                if (userRole === "最高者") {
-                    const targetUserId = userMessage.split(':')[1];
-                    const permissionsData = loadPermissions();
-                    permissionsData[targetUserId] = "非権限者";  // 権限を削除
-                    savePermissions(permissionsData);
-
-                    replyText = `${targetUserId}の権限を削除しました。`;
-                } else {
-                    replyText = "権限削除を行うには「最高者」の権限が必要です。";
-                }
-            }
-
-            // 「Allcoingive:数」コマンドの処理（全員へのコイン付与）
+            // コイン付与（全員）
             else if (userMessage.startsWith("Allcoingive:")) {
                 const amount = parseInt(userMessage.split(":")[1]);
 
-                if (!isNaN(amount) && amount > 0 && userRole === "最高者") {
-                    const allUsers = Object.keys(coins); // すべてのユーザーIDを取得
-                    allUsers.forEach(userId => {
-                        coins[userId] = (coins[userId] || 0) + amount; // 各ユーザーにコインを付与
+                if (!isNaN(amount) && amount > 0) {
+                    Object.keys(coins).forEach(userId => {
+                        coins[userId] = (coins[userId] || 0) + amount;
                     });
                     saveCoins(coins);
 
                     replyText = `全員に${amount}コインを付与しました。`;
                 } else {
-                    replyText = "コイン付与には「最高者」の権限が必要です。";
+                    replyText = "無効なコイン数です。";
                 }
             }
 
-            // 「coingiveID:数」コマンドの処理（個人ユーザーへのコイン付与）
+            // コイン付与（個人）
             else if (userMessage.startsWith("coingiveID:")) {
                 const parts = userMessage.split(":");
                 const targetUserId = parts[1];
                 const amount = parseInt(parts[2]);
 
                 if (!isNaN(amount) && amount > 0) {
-                    coins[targetUserId] = (coins[targetUserId] || 0) + amount;  // 特定ユーザーにコインを付与
+                    coins[targetUserId] = (coins[targetUserId] || 0) + amount;
                     saveCoins(coins);
 
                     replyText = `${targetUserId}に${amount}コインを付与しました。`;
@@ -201,13 +123,29 @@ app.post("/webhook", async (req, res) => {
                 }
             }
 
-            // 「おみくじ」コマンドの処理
+            // おみくじ
             else if (userMessage === "おみくじ") {
                 const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
                 replyText = `おみくじの結果は「${fortune}」です！`;
             }
 
-            // 返信
+            // スロット
+            else if (userMessage === "slot") {
+                if (!coins[userId] || coins[userId] < 1) {
+                    replyText = "コインが足りません！（1コイン必要）";
+                } else {
+                    coins[userId] -= 1; // 1コイン消費
+                    const slotResult = spinSlot();
+                    const reward = checkSlotResult(slotResult);
+                    coins[userId] += reward; // 当たったら報酬を追加
+                    saveCoins(coins);
+
+                    replyText = `スロットの結果: ${slotResult.join(' ')}\n` +
+                                (reward > 0 ? `おめでとう！ ${reward}コイン獲得！` : "はずれ！また挑戦してね！") +
+                                `\nあなたの残りコイン: ${coins[userId]} 枚`;
+                }
+            }
+
             if (replyText) {
                 await sendReply(replyToken, replyText);
             }
