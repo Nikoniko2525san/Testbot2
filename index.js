@@ -125,6 +125,7 @@ app.post("/webhook", async (req, res) => {
                 if (userRole === "最高者") {
                     const mentions = event.message.mentions;
                     const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    console.log("付与するユーザー:", mentionedUser.userId);  // デバッグ用
                     const permissions = loadPermissions();
                     permissions[mentionedUser.userId] = "権限者";  // メンションされたユーザーを権限者に変更
                     savePermissions(permissions);
@@ -138,6 +139,7 @@ app.post("/webhook", async (req, res) => {
                 if (userRole === "最高者") {
                     const mentions = event.message.mentions;
                     const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    console.log("剥奪するユーザー:", mentionedUser.userId);  // デバッグ用
                     const permissions = loadPermissions();
                     permissions[mentionedUser.userId] = "非権限者";  // メンションされたユーザーを非権限者に変更
                     savePermissions(permissions);
