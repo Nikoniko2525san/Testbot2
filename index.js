@@ -114,35 +114,17 @@ app.post("/webhook", async (req, res) => {
                 }
                 replyText = rolesList || "権限が設定されていません。";
             }
-            // 「付与@〇〇」コマンドの処理 (最高者が権限を付与)
-            else if (userMessage.startsWith("付与@") && userRole === "最高者") {
-                const mentions = event.message.mentions;
-                if (mentions.length > 0) {
-                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                    const permissions = loadPermissions();
-                    permissions[mentionedUser.userId] = "権限者";  // 権限者に設定
-                    savePermissions(permissions);
-                    replyText = `ユーザー ${mentionedUser.userId} を権限者に設定しました。`;
+            // 「おみくじ」コマンドの処理
+            else if (userMessage === "おみくじ") {
+                if (userRole === "最高者" || userRole === "権限者") {
+                    replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
                 } else {
-                    replyText = "メンションされたユーザーが見つかりません。";
-                }
-            }
-            // 「剥奪@〇〇」コマンドの処理 (最高者が権限を剥奪)
-            else if (userMessage.startsWith("剥奪@") && userRole === "最高者") {
-                const mentions = event.message.mentions;
-                if (mentions.length > 0) {
-                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                    const permissions = loadPermissions();
-                    permissions[mentionedUser.userId] = "非権限者";  // 非権限者に設定
-                    savePermissions(permissions);
-                    replyText = `ユーザー ${mentionedUser.userId} の権限を剥奪しました。`;
-                } else {
-                    replyText = "メンションされたユーザーが見つかりません。";
+                    replyText = "このコマンドを使う権限がありません。";
                 }
             }
             // 「check@〇〇」コマンドの処理 (権限者以上がメンションされたユーザーのIDを取得)
             else if (userMessage.startsWith("check@") && (userRole === "最高者" || userRole === "権限者")) {
-                const mentions = event.message.mentions;
+                const mentions = event.message?.mentions || [];  // mentionsがundefinedの場合は空配列にする
                 if (mentions.length > 0) {
                     const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
                     replyText = `メンションされたユーザーのID: ${mentionedUser.userId}`;
@@ -150,12 +132,30 @@ app.post("/webhook", async (req, res) => {
                     replyText = "メンションされたユーザーが見つかりません。";
                 }
             }
-            // 「おみくじ」コマンドの処理
-            else if (userMessage === "おみくじ") {
-                if (userRole === "最高者" || userRole === "権限者") {
-                    replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
+            // 「付与@〇〇」コマンドの処理 (最高者が権限者を付与)
+            else if (userMessage.startsWith("付与@") && userRole === "最高者") {
+                const mentions = event.message?.mentions || [];
+                if (mentions.length > 0) {
+                    const mentionedUser = mentions[0];
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "権限者";  // メンションされたユーザーに権限者を付与
+                    savePermissions(permissions);
+                    replyText = `${mentionedUser.userId} に権限者を付与しました。`;
                 } else {
-                    replyText = "このコマンドを使う権限がありません。";
+                    replyText = "メンションされたユーザーが見つかりません。";
+                }
+            }
+            // 「剥奪@〇〇」コマンドの処理 (最高者が権限者を剥奪)
+            else if (userMessage.startsWith("剥奪@") && userRole === "最高者") {
+                const mentions = event.message?.mentions || [];
+                if (mentions.length > 0) {
+                    const mentionedUser = mentions[0];
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "非権限者";  // メンションされたユーザーを非権限者に変更
+                    savePermissions(permissions);
+                    replyText = `${mentionedUser.userId} の権限を剥奪しました。`;
+                } else {
+                    replyText = "メンションされたユーザーが見つかりません。";
                 }
             }
         }
@@ -174,3 +174,4 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+ 
