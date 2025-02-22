@@ -11,7 +11,7 @@ const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 const MESSAGE_LOG = "messages.json"; // メッセージ履歴を保存するJSONファイル
 
 // 管理者のユーザーIDを設定（固定）
-const adminUserId = "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  // 自分のLINE IDに変更
+const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
 
 // 権限データを読み込む
 const loadPermissions = () => {
