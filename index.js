@@ -13,7 +13,7 @@ const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 const fortunes = ["大吉", "中吉", "小吉", "吉", "末吉", "凶", "大凶"];
 
 // 管理者のユーザーIDを設定（固定）
-const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
+const adminUserId = "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  // 自分のLINE IDに変更
 
 // 権限データを読み込む
 const loadPermissions = () => {
@@ -33,6 +33,7 @@ const getUserRole = (userId) => {
     return permissions[userId] || "user";  // 権限がない場合は"user"
 };
 
+// Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
     const events = req.body.events;
 
@@ -48,8 +49,12 @@ app.post("/webhook", async (req, res) => {
 
         // 「check」コマンドの処理
         if (userMessage === "check") {
-            replyText = `あなたのユーザーIDは: ${userId}`;
+            replyText = `あなたのIDは: ${userId}`;
         } 
+        // 「権限」コマンドの処理
+        else if (userMessage === "権限") {
+            replyText = `あなたの権限は: ${userRole}`;
+        }
         // 「おみくじ」コマンドの処理
         else if (userMessage === "おみくじ") {
             if (userRole === "admin" || userRole === "moderator") {
@@ -72,6 +77,11 @@ app.post("/webhook", async (req, res) => {
         });
     }
     res.sendStatus(200);
+});
+
+// `GET /` エンドポイントの追加
+app.get("/", (req, res) => {
+    res.send("LINE Bot Server is running.");
 });
 
 const PORT = process.env.PORT || 3000;
