@@ -11,7 +11,7 @@ const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 const MESSAGE_LOG = "messages.json"; // メッセージ履歴を保存するJSONファイル
 
 // 管理者のユーザーIDを設定（固定）
-const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
+const adminUserId = "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  // 自分のLINE IDに変更
 
 // 権限データを読み込む
 const loadPermissions = () => {
@@ -26,9 +26,9 @@ const savePermissions = (data) => {
 
 // 権限を取得する
 const getUserRole = (userId) => {
-    if (userId === adminUserId) return "admin";
+    if (userId === adminUserId) return "最高者";
     const permissions = loadPermissions();
-    return permissions[userId] || "user";  // 権限がない場合は"user"
+    return permissions[userId] || "非権限者";  // 権限がない場合は"非権限者"
 };
 
 // メッセージ履歴を読み込む
@@ -41,6 +41,15 @@ const loadMessages = () => {
 const saveMessages = (data) => {
     fs.writeFileSync(MESSAGE_LOG, JSON.stringify(data, null, 2), "utf-8");
 };
+
+// おみくじの結果を定義
+const fortunes = [
+    "大吉",
+    "吉",
+    "中吉",
+    "小吉",
+    "凶"
+];
 
 // Webhookエンドポイント
 app.post("/webhook", async (req, res) => {
@@ -105,24 +114,46 @@ app.post("/webhook", async (req, res) => {
                 }
                 replyText = rolesList || "権限が設定されていません。";
             }
-            // 「おみくじ」コマンドの処理
-            else if (userMessage === "おみくじ") {
-                if (userRole === "admin" || userRole === "moderator") {
-                    replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
+            // 「付与@〇〇」コマンドの処理 (最高者が権限を付与)
+            else if (userMessage.startsWith("付与@") && userRole === "最高者") {
+                const mentions = event.message.mentions;
+                if (mentions.length > 0) {
+                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "権限者";  // 権限者に設定
+                    savePermissions(permissions);
+                    replyText = `ユーザー ${mentionedUser.userId} を権限者に設定しました。`;
                 } else {
-                    replyText = "このコマンドを使う権限がありません。";
+                    replyText = "メンションされたユーザーが見つかりません。";
                 }
             }
-            // 「checkmid」メンションコマンドの処理
-            else if (userMessage.startsWith("checkmid") && event.message.mentions) {
-                if (userRole === "admin" || userRole === "moderator") {
-                    const mentions = event.message.mentions;
-                    if (mentions.length > 0) {
-                        const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
-                        replyText = `メンションされたユーザーのID (mid): ${mentionedUser.userId}`;
-                    } else {
-                        replyText = "メンションされたユーザーが見つかりません。";
-                    }
+            // 「剥奪@〇〇」コマンドの処理 (最高者が権限を剥奪)
+            else if (userMessage.startsWith("剥奪@") && userRole === "最高者") {
+                const mentions = event.message.mentions;
+                if (mentions.length > 0) {
+                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    const permissions = loadPermissions();
+                    permissions[mentionedUser.userId] = "非権限者";  // 非権限者に設定
+                    savePermissions(permissions);
+                    replyText = `ユーザー ${mentionedUser.userId} の権限を剥奪しました。`;
+                } else {
+                    replyText = "メンションされたユーザーが見つかりません。";
+                }
+            }
+            // 「check@〇〇」コマンドの処理 (権限者以上がメンションされたユーザーのIDを取得)
+            else if (userMessage.startsWith("check@") && (userRole === "最高者" || userRole === "権限者")) {
+                const mentions = event.message.mentions;
+                if (mentions.length > 0) {
+                    const mentionedUser = mentions[0];  // 最初のメンションユーザーを取得
+                    replyText = `メンションされたユーザーのID: ${mentionedUser.userId}`;
+                } else {
+                    replyText = "メンションされたユーザーが見つかりません。";
+                }
+            }
+            // 「おみくじ」コマンドの処理
+            else if (userMessage === "おみくじ") {
+                if (userRole === "最高者" || userRole === "権限者") {
+                    replyText = `あなたの運勢は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
                 } else {
                     replyText = "このコマンドを使う権限がありません。";
                 }
