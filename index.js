@@ -1,4 +1,4 @@
-const ACCESS_TOKEN = 'YOUR_ACCESS_TOKEN_HERE'; // LINEアクセストークン
+const ACCESS_TOKEN = 'Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU='; // LINEアクセストークン
 const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
@@ -9,7 +9,7 @@ app.use(express.json());
 const PERMISSION_FILE = "permissions.json"; // 権限データ
 const COINS_FILE = "coins.json"; // コインデータ
 
-const adminUserId = "YOUR_ADMIN_USER_ID_HERE"; // 管理者のユーザーID
+const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3"; // 管理者のユーザーID
 
 // ファイル読み込み関数
 const loadData = (file) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf-8")) : {};
