@@ -109,7 +109,7 @@ app.post("/webhook", async (req, res) => {
         else if (userMessage === "おみくじ" && isSimplifiedOrHigher(userId)) {
             const fortunes = ["大吉", "吉", "中吉", "小吉", "凶"];
             replyText = `おみくじの結果は「${fortunes[Math.floor(Math.random() * fortunes.length)]}」です！`;
-        } else if (userMessage === "スロット" && permissions(userId)) {
+        } else if (userMessage === "スロット" && isSimplifiedOrHigher(userId)) {
             if ((coins[userId] || 0) < 1) {
                 replyText = "コインが足りません！（1コイン必要）";
             } else {
