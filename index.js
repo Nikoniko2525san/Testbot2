@@ -32,7 +32,7 @@ const sendReply = async (replyToken, text) => {
             messages: [{ type: "text", text }]
         }, {
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-            timeout: 10000 // タイムアウト設定（5000ミリ秒）
+            timeout: 5000 // タイムアウト設定（5000ミリ秒）
         });
     } catch (error) {
         console.error("送信エラー:", error);
@@ -72,11 +72,6 @@ app.post("/webhook", async (req, res) => {
 
         if (!userMessage) continue;
 
-        // 送信取り消しされた場合
-        if (event.type === "message" && message.type === "text" && message.isCancelled) {
-            replyText = `送信取り消しされた内容: "${message.text}"`;
-        }
-
         // 権限確認コマンド
         if (userMessage === "権限") {
             replyText = `あなたの権限は: ${getPermissionLevel(userId)} です。`;
@@ -90,12 +85,6 @@ app.post("/webhook", async (req, res) => {
         // ユーザーID確認コマンド
         else if (userMessage === "check") {
             replyText = `あなたのユーザーID: ${userId}`;
-        }
-
-        // AIと〇〇について話す (簡易権限以上)
-        else if (userMessage.startsWith("talk:") && isSimplifiedOrHigher(userId)) {
-            const topic = userMessage.split(":")[1];
-            replyText = `AIと「${topic}」について話します。`;
         }
 
         // スロットコマンド
@@ -228,22 +217,6 @@ app.post("/webhook", async (req, res) => {
             replyText = `${targetId} から簡易権限を剥奪しました。`;
         }
 
-        // 中権限者付与 (最高者のみ)
-        else if (userMessage.startsWith("付与中権限:") && isSuperAdmin(userId)) {
-            const targetId = userMessage.split(":")[1];
-            permissions[targetId] = "中権限者";
-            saveData(DATA_FILE, permissions);
-            replyText = `${targetId} に中権限者を付与しました。`;
-        }
-
-        // 中権限者剥奪 (最高者のみ)
-        else if (userMessage.startsWith("削除中権限:") && isSuperAdmin(userId)) {
-            const targetId = userMessage.split(":")[1];
-            permissions[targetId] = "非権限者";
-            saveData(DATA_FILE, permissions);
-            replyText = `${targetId} から中権限者権限を剥奪しました。`;
-        }
-
         // 権限者一覧
         else if (userMessage === "権限者一覧") {
             let list = "権限者一覧:\n";
@@ -251,28 +224,6 @@ app.post("/webhook", async (req, res) => {
                 list += `${userId}: ${permissions[userId]}\n`;
             }
             replyText = list;
-        }
-
-        // じゃんけん
-        else if (userMessage === "じゃんけん") {
-            const choices = ["グー", "チョキ", "パー"];
-            const userChoice = choices[Math.floor(Math.random() * 3)];
-            const botChoice = choices[Math.floor(Math.random() * 3)];
-            let result = "";
-
-            if (userChoice === botChoice) {
-                result = "引き分け";
-            } else if (
-                (userChoice === "グー" && botChoice === "チョキ") ||
-                (userChoice === "チョキ" && botChoice === "パー") ||
-                (userChoice === "パー" && botChoice === "グー")
-            ) {
-                result = "勝ち";
-            } else {
-                result = "負け";
-            }
-
-            replyText = `あなたの選択: ${userChoice}\nBotの選択: ${botChoice}\n結果: ${result}`;
         }
 
         if (replyText) {
