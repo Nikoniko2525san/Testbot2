@@ -32,7 +32,7 @@ const sendReply = async (replyToken, text) => {
             messages: [{ type: "text", text }]
         }, {
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-            timeout: 15000 // タイムアウト設定（15000ミリ秒）
+            timeout: 30000 // タイムアウト設定（15000ミリ秒）
         });
     } catch (error) {
         if (error.code === 'ECONNABORTED') {
@@ -45,12 +45,12 @@ const sendReply = async (replyToken, text) => {
                         messages: [{ type: "text", text }]
                     }, {
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-                        timeout: 15000
+                        timeout: 30000
                     });
                 } catch (retryError) {
                     console.error("再試行失敗:", retryError);
                 }
-            }, 5000); // 5秒後にリトライ
+            }, 10000); // 2秒後にリトライ
         } else {
             console.error("送信エラー:", error);
         }
