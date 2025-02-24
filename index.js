@@ -45,7 +45,7 @@ const sendReply = async (replyToken, text) => {
                         messages: [{ type: "text", text }]
                     }, {
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-                        timeout: 5000
+                        timeout: 15000
                     });
                 } catch (retryError) {
                     console.error("再試行失敗:", retryError);
