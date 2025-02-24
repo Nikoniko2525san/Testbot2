@@ -24,7 +24,7 @@ const isSuperAdmin = (userId) => userId === adminUserId;
 const isAdminOrHigher = (userId) => ["最高者", "中権限者"].includes(getPermissionLevel(userId));
 const isSimplifiedOrHigher = (userId) => ["最高者", "中権限者", "簡易者"].includes(getPermissionLevel(userId));
 
-// LINEメッセージ送信 (タイムアウト対策)
+// LINEメッセージ送信 (即座に返す処理)
 const sendReply = async (replyToken, text) => {
     try {
         await axios.post("https://api.line.me/v2/bot/message/reply", {
@@ -35,25 +35,7 @@ const sendReply = async (replyToken, text) => {
             timeout: 5000 // タイムアウト設定（5000ミリ秒）
         });
     } catch (error) {
-        if (error.code === 'ECONNABORTED') {
-            console.error("タイムアウトエラー:", error.message);
-            // タイムアウト発生時のリトライ処理
-            setTimeout(async () => {
-                try {
-                    await axios.post("https://api.line.me/v2/bot/message/reply", {
-                        replyToken,
-                        messages: [{ type: "text", text }]
-                    }, {
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-                        timeout: 5000
-                    });
-                } catch (retryError) {
-                    console.error("再試行失敗:", retryError);
-                }
-            }, 2000); // 2秒後にリトライ
-        } else {
-            console.error("送信エラー:", error);
-        }
+        console.error("送信エラー:", error);
     }
 };
 
@@ -294,7 +276,7 @@ app.post("/webhook", async (req, res) => {
         }
 
         if (replyText) {
-            await sendReply(replyToken, replyText); // 非同期で送信
+            sendReply(replyToken, replyText);
         }
     }
 });
