@@ -5,7 +5,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = "Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU"; // LINE Access Token
+const ACCESS_TOKEN = "Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU="; // LINE Access Token
 const DATA_FILE = "permissions.json";
 const COINS_FILE = "coins.json";
 
@@ -32,7 +32,7 @@ const sendReply = async (replyToken, text) => {
             messages: [{ type: "text", text }]
         }, {
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-            timeout: 30000 // タイムアウト設定（15000ミリ秒）
+            timeout: 5000 // タイムアウト設定（5000ミリ秒）
         });
     } catch (error) {
         if (error.code === 'ECONNABORTED') {
@@ -45,12 +45,12 @@ const sendReply = async (replyToken, text) => {
                         messages: [{ type: "text", text }]
                     }, {
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-                        timeout: 30000
+                        timeout: 5000
                     });
                 } catch (retryError) {
                     console.error("再試行失敗:", retryError);
                 }
-            }, 10000); // 2秒後にリトライ
+            }, 2000); // 2秒後にリトライ
         } else {
             console.error("送信エラー:", error);
         }
@@ -110,6 +110,12 @@ app.post("/webhook", async (req, res) => {
             replyText = `あなたのユーザーID: ${userId}`;
         }
 
+        // AIと〇〇について話す (簡易権限以上)
+        else if (userMessage.startsWith("talk:") && isSimplifiedOrHigher(userId)) {
+            const topic = userMessage.split(":")[1];
+            replyText = `AIと「${topic}」について話します。`;
+        }
+
         // スロットコマンド
         else if (userMessage.startsWith("スロット:") && isSimplifiedOrHigher(userId)) {
             const betAmount = parseInt(userMessage.split(":")[1]);
@@ -150,6 +156,20 @@ app.post("/webhook", async (req, res) => {
             replyText = `あなたの運勢は: ${fortune}`;
         }
 
+        // メンション相手のユーザーIDを取得 (check:@メンション)
+        else if (userMessage.startsWith("check:@")) {
+            const mentionedUserId = userMessage.split(":")[1];
+            replyText = `メンションされたユーザーID: ${mentionedUserId}`;
+        }
+
+        // IDのユーザーの権限とコインの枚数を確認 (最高者のみ)
+        else if (userMessage.startsWith("check:id:") && isSuperAdmin(userId)) {
+            const targetId = userMessage.split(":")[2];
+            const permissionLevel = getPermissionLevel(targetId);
+            const coinBalance = coins[targetId] || 0;
+            replyText = `${targetId} の権限: ${permissionLevel}\nコイン残高: ${coinBalance} 枚`;
+        }
+
         // 個別コイン付与 (最高者のみ)
         else if (userMessage.startsWith("coingive:") && isSuperAdmin(userId)) {
             const parts = userMessage.split(":");
@@ -180,27 +200,28 @@ app.post("/webhook", async (req, res) => {
             }
         }
 
-        // 個別コイン剥奪 (最高者のみ)
+        // コイン剥奪 (最高者のみ)
         else if (userMessage.startsWith("coinnotgive:") && isSuperAdmin(userId)) {
-            const targetId = userMessage.split(":")[1];
-            const amount = parseInt(userMessage.split(":")[2]);
+            const parts = userMessage.split(":");
+            const targetId = parts[1];
+            const amount = parseInt(parts[2]);
 
             if (!isNaN(amount) && amount > 0 && coins[targetId] >= amount) {
                 coins[targetId] -= amount;
                 saveData(COINS_FILE, coins);
                 replyText = `${targetId} から ${amount} コインを剥奪しました。`;
             } else {
-                replyText = "無効なコインの額か、コインが不足しています。";
+                replyText = "無効なコインの額または不足しています。";
             }
         }
 
-        // 全員のコイン剥奪 (最高者のみ)
+        // 全員からコイン剥奪 (最高者のみ)
         else if (userMessage.startsWith("coinnotgiveall:") && isSuperAdmin(userId)) {
             const amount = parseInt(userMessage.split(":")[1]);
 
             if (!isNaN(amount) && amount > 0) {
                 for (const targetId in coins) {
-                    coins[targetId] -= amount;
+                    coins[targetId] = Math.max(0, coins[targetId] - amount);
                 }
                 saveData(COINS_FILE, coins);
                 replyText = `全てのユーザーから ${amount} コインを剥奪しました。`;
@@ -220,13 +241,9 @@ app.post("/webhook", async (req, res) => {
         // 簡易権限剥奪 (中権限者以上)
         else if (userMessage.startsWith("削除簡易:") && isAdminOrHigher(userId)) {
             const targetId = userMessage.split(":")[1];
-            if (permissions[targetId] === "簡易者") {
-                delete permissions[targetId];
-                saveData(DATA_FILE, permissions);
-                replyText = `${targetId} から簡易権限を剥奪しました。`;
-            } else {
-                replyText = "そのユーザーは簡易権限を持っていません。";
-            }
+            permissions[targetId] = "非権限者";
+            saveData(DATA_FILE, permissions);
+            replyText = `${targetId} から簡易権限を剥奪しました。`;
         }
 
         // 中権限者付与 (最高者のみ)
@@ -234,65 +251,52 @@ app.post("/webhook", async (req, res) => {
             const targetId = userMessage.split(":")[1];
             permissions[targetId] = "中権限者";
             saveData(DATA_FILE, permissions);
-            replyText = `${targetId} に中権限を付与しました。`;
+            replyText = `${targetId} に中権限者を付与しました。`;
         }
 
         // 中権限者剥奪 (最高者のみ)
         else if (userMessage.startsWith("削除中権限:") && isSuperAdmin(userId)) {
             const targetId = userMessage.split(":")[1];
-            if (permissions[targetId] === "中権限者") {
-                delete permissions[targetId];
-                saveData(DATA_FILE, permissions);
-                replyText = `${targetId} から中権限を剥奪しました。`;
-            } else {
-                replyText = "そのユーザーは中権限を持っていません。";
-            }
+            permissions[targetId] = "非権限者";
+            saveData(DATA_FILE, permissions);
+            replyText = `${targetId} から中権限者権限を剥奪しました。`;
         }
 
-        // 権限者一覧コマンド
+        // 権限者一覧
         else if (userMessage === "権限者一覧") {
-            let usersWithPermissions = [];
-            for (const [id, permission] of Object.entries(permissions)) {
-                usersWithPermissions.push(`${id}: ${permission}`);
+            let list = "権限者一覧:\n";
+            for (const userId in permissions) {
+                list += `${userId}: ${permissions[userId]}\n`;
             }
-            replyText = `権限者一覧:\n${usersWithPermissions.join("\n")}`;
+            replyText = list;
         }
 
-        // じゃんけんコマンド
+        // じゃんけん
         else if (userMessage === "じゃんけん") {
             const choices = ["グー", "チョキ", "パー"];
             const userChoice = choices[Math.floor(Math.random() * 3)];
             const botChoice = choices[Math.floor(Math.random() * 3)];
-            let result = "あいこ";
-            if ((userChoice === "グー" && botChoice === "チョキ") ||
+            let result = "";
+
+            if (userChoice === botChoice) {
+                result = "引き分け";
+            } else if (
+                (userChoice === "グー" && botChoice === "チョキ") ||
                 (userChoice === "チョキ" && botChoice === "パー") ||
-                (userChoice === "パー" && botChoice === "グー")) {
-                result = "あなたの勝ち";
-            } else if (userChoice !== botChoice) {
-                result = "あなたの負け";
+                (userChoice === "パー" && botChoice === "グー")
+            ) {
+                result = "勝ち";
+            } else {
+                result = "負け";
             }
+
             replyText = `あなたの選択: ${userChoice}\nBotの選択: ${botChoice}\n結果: ${result}`;
         }
 
-        // AIとの会話 (簡易権限以上)
-        else if (userMessage.startsWith("talk:") && isSimplifiedOrHigher(userId)) {
-            const topic = userMessage.split(":")[1];
-            replyText = `AIと「${topic}」について話しています...`;
-        }
-
-        // メンション相手のユーザーIDを取得
-        else if (userMessage.startsWith("check:@") && isSimplifiedOrHigher(userId)) {
-            const mentionedUserId = userMessage.split(":")[1];
-            replyText = `メンション相手のユーザーID: ${mentionedUserId}`;
-        }
-
-        // 応答が設定されていない場合のデフォルトメッセージ
         if (replyText) {
             sendReply(replyToken, replyText);
         }
     }
 });
 
-app.listen(3000, () => {
-    console.log("LINE Bot is running...");
-});
+app.listen(3000, () => console.log("LINE Bot Server is running on port 3000"));
