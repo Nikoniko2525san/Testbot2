@@ -294,7 +294,7 @@ app.post("/webhook", async (req, res) => {
         }
 
         if (replyText) {
-            sendReply(replyToken, replyText);
+            await sendReply(replyToken, replyText); // 非同期で送信
         }
     }
 });
