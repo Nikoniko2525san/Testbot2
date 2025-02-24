@@ -50,7 +50,7 @@ const sendReply = async (replyToken, text) => {
                 } catch (retryError) {
                     console.error("再試行失敗:", retryError);
                 }
-            }, 2000); // 2秒後にリトライ
+            }, 5000); // 5秒後にリトライ
         } else {
             console.error("送信エラー:", error);
         }
