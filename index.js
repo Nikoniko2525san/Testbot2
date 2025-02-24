@@ -32,7 +32,7 @@ const sendReply = async (replyToken, text) => {
             messages: [{ type: "text", text }]
         }, {
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${ACCESS_TOKEN}` },
-            timeout: 5000 // タイムアウト設定（5000ミリ秒）
+            timeout: 10000 // タイムアウト設定（5000ミリ秒）
         });
     } catch (error) {
         console.error("送信エラー:", error);
