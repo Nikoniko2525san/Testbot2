@@ -10,42 +10,75 @@ app.use(express.json());
 const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
 const MESSAGE_LOG = "messages.json"; // メッセージ履歴を保存するJSONファイル
 const COINS_FILE = "coins.json"; // コイン情報を保存するJSONファイル
-const SAY_LOG_FILE = "sayLog.json"; // 特定IDの言葉を保存するJSONファイル
 
 // 管理者のユーザーIDを設定（固定）
 const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
 
 // コインデータを読み込む
 const loadCoins = () => {
-    if (!fs.existsSync(COINS_FILE)) return {};
-    return JSON.parse(fs.readFileSync(COINS_FILE, "utf-8"));
+    try {
+        if (!fs.existsSync(COINS_FILE)) return {};
+        return JSON.parse(fs.readFileSync(COINS_FILE, "utf-8"));
+    } catch (err) {
+        console.error("ファイル読み込みエラー:", err);
+        return {};
+    }
 };
 
 // コインデータを保存する
 const saveCoins = (data) => {
-    fs.writeFileSync(COINS_FILE, JSON.stringify(data, null, 2), "utf-8");
+    try {
+        fs.writeFileSync(COINS_FILE, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+        console.error("ファイル保存エラー:", err);
+    }
 };
 
 // 権限データを読み込む
 const loadPermissions = () => {
-    if (!fs.existsSync(DATA_FILE)) return {};
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+    try {
+        if (!fs.existsSync(DATA_FILE)) return {};
+        return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+    } catch (err) {
+        console.error("ファイル読み込みエラー:", err);
+        return {};
+    }
 };
 
 // 権限データを保存する
 const savePermissions = (data) => {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
+    try {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+        console.error("ファイル保存エラー:", err);
+    }
 };
 
-// 言葉データを読み込む
-const loadSayLog = () => {
-    if (!fs.existsSync(SAY_LOG_FILE)) return {};
-    return JSON.parse(fs.readFileSync(SAY_LOG_FILE, "utf-8"));
+// 権限を取得する
+const getUserRole = (userId) => {
+    if (userId === adminUserId) return "最高者";  // 管理者を「最高者」とする
+    const permissions = loadPermissions();
+    return permissions[userId] || "非権限者";  // 権限がない場合は「非権限者」
 };
 
-// 言葉データを保存する
-const saveSayLog = (data) => {
-    fs.writeFileSync(SAY_LOG_FILE, JSON.stringify(data, null, 2), "utf-8");
+// メッセージ履歴を読み込む
+const loadMessages = () => {
+    try {
+        if (!fs.existsSync(MESSAGE_LOG)) return {};
+        return JSON.parse(fs.readFileSync(MESSAGE_LOG, "utf-8"));
+    } catch (err) {
+        console.error("ファイル読み込みエラー:", err);
+        return {};
+    }
+};
+
+// メッセージ履歴を保存する
+const saveMessages = (data) => {
+    try {
+        fs.writeFileSync(MESSAGE_LOG, JSON.stringify(data, null, 2), "utf-8");
+    } catch (err) {
+        console.error("ファイル保存エラー:", err);
+    }
 };
 
 // おみくじの結果を定義
@@ -84,7 +117,6 @@ app.post("/webhook", async (req, res) => {
     const coins = loadCoins(); // コイン情報を読み込む
     const permissions = loadPermissions(); // 権限情報を読み込む
     const messages = loadMessages(); // メッセージ履歴を読み込む
-    const sayLog = loadSayLog(); // 言葉ログを読み込む
 
     const sendReply = async (replyToken, replyText) => {
         try {
@@ -108,7 +140,7 @@ app.post("/webhook", async (req, res) => {
 
         const replyToken = event.replyToken;
         const userId = event.source.userId;
-        const userRole = permissions[userId] || "非権限者";
+        const userRole = getUserRole(userId);
 
         let replyText = null;
 
@@ -126,9 +158,8 @@ app.post("/webhook", async (req, res) => {
             } 
             // 「コイン」コマンドの処理
             else if (userMessage === "コイン") {
-                const userCoins = coins[userId] || 0;
-                replyText = `あなたの残りコイン: ${userCoins}`;
-            } 
+                replyText = `あなたの残りコイン: ${coins[userId] || 0}コイン`;
+            }
             // 「スロット」コマンドの処理
             else if (userMessage === "スロット") {
                 const userCoins = coins[userId] || 0;
@@ -148,111 +179,110 @@ app.post("/webhook", async (req, res) => {
             }
             // 「おみくじ」コマンドの処理
             else if (userMessage === "おみくじ") {
-                const result = fortunes[Math.floor(Math.random() * fortunes.length)];
-                replyText = `あなたのおみくじ結果: ${result}`;
+                const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+                replyText = `あなたのおみくじの結果は: ${fortune}`;
             }
 
-            // 最高者のみができるコマンド群
+            // 最高者だけができるコマンド
             if (userRole === "最高者") {
-                // 「coingive:ID:数値」コマンドの処理
+                // 個人にコインを付与
                 if (userMessage.startsWith("coingive:")) {
                     const parts = userMessage.split(":");
                     const targetUserId = parts[1];
                     const amount = parseInt(parts[2]);
 
                     if (!isNaN(amount) && amount > 0) {
-                        const targetUserCoins = coins[targetUserId] || 0;
-                        coins[targetUserId] = targetUserCoins + amount; // コインを付与
+                        coins[targetUserId] = (coins[targetUserId] || 0) + amount;
                         saveCoins(coins);
 
                         replyText = `${targetUserId}に${amount}コインを付与しました。`;
                     } else {
-                        replyText = "無効なコマンドです。";
+                        replyText = "無効なコイン数です。";
                     }
                 }
 
-                // 「allcoingive:数値」コマンドの処理
-                else if (userMessage.startsWith("allcoingive:")) {
+                // 全てのコインを付与
+                if (userMessage.startsWith("allcoingive:")) {
                     const amount = parseInt(userMessage.split(":")[1]);
 
                     if (!isNaN(amount) && amount > 0) {
-                        for (const userId in coins) {
-                            coins[userId] = (coins[userId] || 0) + amount; // 全員にコインを付与
-                        }
+                        Object.keys(coins).forEach(user => {
+                            coins[user] += amount;
+                        });
                         saveCoins(coins);
 
                         replyText = `全員に${amount}コインを付与しました。`;
                     } else {
-                        replyText = "無効なコマンドです。";
+                        replyText = "無効なコイン数です。";
                     }
                 }
 
-                // 「coinnotgive:ID:数値」コマンドの処理
-                else if (userMessage.startsWith("coinnotgive:")) {
+                // 個人にコインを剥奪
+                if (userMessage.startsWith("coinnotgive:")) {
                     const parts = userMessage.split(":");
                     const targetUserId = parts[1];
                     const amount = parseInt(parts[2]);
 
                     if (!isNaN(amount) && amount > 0) {
-                        const targetUserCoins = coins[targetUserId] || 0;
-
-                        if (targetUserCoins >= amount) {
-                            coins[targetUserId] = targetUserCoins - amount; // コインを削除
+                        if (coins[targetUserId] >= amount) {
+                            coins[targetUserId] -= amount;
                             saveCoins(coins);
 
                             replyText = `${targetUserId}から${amount}コインを剥奪しました。`;
                         } else {
-                            replyText = `${targetUserId}は${amount}コインを持っていません。`;
+                            replyText = `${targetUserId}には${amount}コインが足りません。`;
                         }
                     } else {
-                        replyText = "無効なコマンドです。";
+                        replyText = "無効なコイン数です。";
                     }
                 }
 
-                // 「allcoinnotgive:数値」コマンドの処理
-                else if (userMessage.startsWith("allcoinnotgive:")) {
+                // 全てのコインを剥奪
+                if (userMessage.startsWith("allcoinnotgive:")) {
                     const amount = parseInt(userMessage.split(":")[1]);
 
                     if (!isNaN(amount) && amount > 0) {
-                        for (const userId in coins) {
-                            const userCoins = coins[userId] || 0;
-                            coins[userId] = Math.max(0, userCoins - amount); // コインを剥奪
-                        }
+                        Object.keys(coins).forEach(user => {
+                            coins[user] -= amount;
+                        });
                         saveCoins(coins);
 
                         replyText = `全員から${amount}コインを剥奪しました。`;
                     } else {
-                        replyText = "無効なコマンドです。";
+                        replyText = "無効なコイン数です。";
                     }
                 }
 
-                // 「say:ID:言葉」コマンドの処理
-                else if (userMessage.startsWith("say:")) {
+                // 特定のIDが話す言葉を設定
+                if (userMessage.startsWith("say:")) {
                     const parts = userMessage.split(":");
                     const targetUserId = parts[1];
                     const words = parts.slice(2).join(":");
 
-                    sayLog[targetUserId] = words;
-                    saveSayLog(sayLog);
+                    messages[targetUserId] = words;
+                    saveMessages(messages);
 
                     replyText = `${targetUserId}が話す言葉を「${words}」に設定しました。`;
                 }
 
-                // 「notsay:ID」コマンドの処理
-                else if (userMessage.startsWith("notsay:")) {
-                    const parts = userMessage.split(":");
-                    const targetUserId = parts[1];
+                // 特定のIDの言葉を削除
+                if (userMessage.startsWith("notsay:")) {
+                    const targetUserId = userMessage.split(":")[1];
 
-                    delete sayLog[targetUserId];
-                    saveSayLog(sayLog);
+                    if (messages[targetUserId]) {
+                        delete messages[targetUserId];
+                        saveMessages(messages);
 
-                    replyText = `${targetUserId}の言葉を削除しました。`;
+                        replyText = `${targetUserId}の話した言葉を削除しました。`;
+                    } else {
+                        replyText = `${targetUserId}の話した言葉は存在しません。`;
+                    }
                 }
             }
 
-            // 0コインの人へメッセージ
+            // 0コインになった場合
             if (coins[userId] === 0) {
-                replyText = "コインが0になりました。最高者に言ってください。";
+                replyText = "あなたのコインが0になりました。最高者にお願いしてください。";
             }
         }
 
