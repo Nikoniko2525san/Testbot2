@@ -4,7 +4,7 @@ const fs = require("fs");
 const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = "Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU="; // LINEアクセストークン
+const ACCESS_TOKEN = "scim9t3j5eY+OB6O0hgo32s1olzFkxqC0f2U7CWcy30k1R3orR5uNc+disMdUHIRBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeR85MS+I2YYt+23YrzC88zIhizNU8cGhNS/eurmqB6n8AdB04t89/1O/w1cDnyilFU="; // LINEアクセストークン
 const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3"; // 管理者のユーザーID
 
 const DATA_FILE = "permissions.json";
