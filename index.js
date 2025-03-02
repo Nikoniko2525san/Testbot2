@@ -1,209 +1,129 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { Client } = require('@line/bot-sdk');
-const fs = require('fs').promises;
-
-// LINE BOTの設定
-const config = {
-    channelAccessToken: 'Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU=',
-    channelSecret: '3f32c3ed37eb7b876eed85d378fe76fc'
-};
-
-const client = new Client(config);
+const express = require("express");
+const axios = require("axios");
+const fs = require("fs");
 const app = express();
+app.use(express.json());
 
-// ユーザーの情報、コイン、権限を保存するためのデータ構造
-let users = {}; // {userId: {coins: 20, role: '非権限者'}}
-let messages = {}; // {userId: 'message'}
+const ACCESS_TOKEN = "Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU="; // LINEアクセストークン
+const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3"; // 管理者のユーザーID
 
-const saveData = async () => {
-    await fs.writeFile('users.json', JSON.stringify(users));
-    await fs.writeFile('messages.json', JSON.stringify(messages));
-};
+const DATA_FILE = "permissions.json";
+const COINS_FILE = "coins.json";
+const KEYWORDS_FILE = "keywords.json";
+const MESSAGES_FILE = "messages.json";
 
-const loadData = async () => {
+const TIMEOUT = 5000; // タイムアウト時間（ミリ秒）
+
+// ファイルの読み込み（タイムアウト処理付き）
+function readFileSafe(filename, defaultValue) {
     try {
-        const usersData = await fs.readFile('users.json');
-        users = JSON.parse(usersData);
-    } catch (e) {
-        console.log('No users data found, starting fresh.');
+        const data = fs.readFileSync(filename, "utf8");
+        return JSON.parse(data);
+    } catch (error) {
+        return defaultValue;
     }
+}
 
-    try {
-        const messagesData = await fs.readFile('messages.json');
-        messages = JSON.parse(messagesData);
-    } catch (e) {
-        console.log('No messages data found, starting fresh.');
-    }
-};
+// ファイルの書き込み
+function writeFileSafe(filename, data) {
+    fs.writeFileSync(filename, JSON.stringify(data, null, 2));
+}
 
-loadData();
+let permissions = readFileSafe(DATA_FILE, {});
+let coins = readFileSafe(COINS_FILE, {});
+let keywords = readFileSafe(KEYWORDS_FILE, {});
+let messages = readFileSafe(MESSAGES_FILE, {});
 
-// リクエストボディをJSONとしてパース
-app.use(bodyParser.json());
-
-// メッセージ受信時の処理
-app.post('/webhook', async (req, res) => {
+app.post("/webhook", async (req, res) => {
     const events = req.body.events;
     for (const event of events) {
-        if (event.type === 'message' && event.message.type === 'text') {
-            const userId = event.source.userId;
-            const userMessage = event.message.text;
-            const replyToken = event.replyToken;
-
-            // ユーザーが初めてメッセージを送った場合、デフォルトコイン20と非権限者に設定
-            if (!users[userId]) {
-                users[userId] = { coins: 20, role: '非権限者' };
-                await saveData();
+        if (event.type !== "message" || event.message.type !== "text") continue;
+        
+        const userId = event.source.userId;
+        const replyToken = event.replyToken;
+        const userMessage = event.message.text;
+        
+        if (!permissions[userId]) {
+            permissions[userId] = "非権限者";
+            coins[userId] = 20;
+        }
+        
+        if (userMessage === "権限") {
+            await sendReply(replyToken, `あなたの権限は「${permissions[userId]}」です。`);
+        } else if (userMessage === "check") {
+            await sendReply(replyToken, `あなたのIDは ${userId} です。`);
+        } else if (userMessage === "コイン") {
+            await sendReply(replyToken, `あなたの残コインは ${coins[userId]} コインです。`);
+        } else if (userMessage === "スロット") {
+            if (coins[userId] < 1) {
+                await sendReply(replyToken, "コインが足りません。最高者に付与を依頼してください。");
+            } else {
+                coins[userId] -= 1;
+                const result = Math.floor(Math.random() * 1000);
+                let reward = 0;
+                if ([111, 222, 333, 444, 555, 666, 888, 999].includes(result)) reward = 100;
+                if (result === 777) reward = 777;
+                coins[userId] += reward;
+                await sendReply(replyToken, `スロット結果: ${result}\n${reward ? `おめでとうございます！${reward}コイン獲得！` : "ハズレ…"}\n残コイン: ${coins[userId]}`);
             }
-
-            const userRole = users[userId].role;
-            let replyText = "";
-
-            // キーワード応答・ID応答
-            if (userMessage.startsWith("key:")) {
-                const [_, key, response] = userMessage.split(":");
-                messages[key] = response;
-                await saveData();
-                replyText = `キーワード応答設定: ${key} => ${response}`;
-            }
-
-            if (userMessage.startsWith("notkey:")) {
-                const [_, key] = userMessage.split(":");
-                delete messages[key];
-                await saveData();
-                replyText = `キーワード応答削除: ${key}`;
-            }
-
-            if (messages[userMessage]) {
-                replyText = messages[userMessage];
-            }
-
-            // ID応答設定と削除
-            if ((userRole === "権限者" || userRole === "最高者") && userMessage.startsWith("say:")) {
-                const [_, targetId, response] = userMessage.split(":");
-                messages[targetId] = response;
-                await saveData();
-                replyText = `ID応答設定: ${targetId} => ${response}`;
-            }
-
-            if ((userRole === "権限者" || userRole === "最高者") && userMessage.startsWith("notsay:")) {
-                const [_, targetId] = userMessage.split(":");
-                delete messages[targetId];
-                await saveData();
-                replyText = `ID応答削除: ${targetId}`;
-            }
-
-            // コイン情報
-            if (userMessage === "コイン") {
-                replyText = `あなたの残コインは${users[userId].coins}コインです。`;
-            }
-
-            // 権限情報
-            if (userMessage === "権限") {
-                replyText = `あなたの権限は「${userRole}」です。`;
-            }
-
-            // チェック（ユーザーID送信）
-            if (userMessage === "check") {
-                replyText = `あなたのIDは${userId}です。`;
-            }
-
-            // スロットゲーム
-            if (userMessage === "スロット") {
-                if (users[userId].coins < 1) {
-                    replyText = "コインが足りません。最高者にコインの付与を依頼してください。";
-                } else {
-                    users[userId].coins -= 1;
-                    const slotResult = Math.floor(Math.random() * 1000); // 0-999
-                    let reward = 0;
-                    if (slotResult === 777) reward = 777;
-                    else if ([111, 222, 333, 444, 555, 666, 888, 999].includes(slotResult)) reward = 100;
-
-                    users[userId].coins += reward;
-                    await saveData();
-                    replyText = `スロット結果: ${slotResult}\n${reward}コイン獲得！\n残りコイン: ${users[userId].coins}`;
-                }
-            }
-
-            // コイン付与・剥奪（最高者のみ）
-            if (userRole === "最高者") {
-                if (userMessage.startsWith("coingive:")) {
-                    const [_, targetId, amount] = userMessage.split(":");
-                    users[targetId].coins += parseInt(amount);
-                    await saveData();
-                    replyText = `${targetId}に${amount}コインを付与しました。`;
-                }
-
-                if (userMessage.startsWith("allcoingive:")) {
-                    const [_, amount] = userMessage.split(":");
-                    for (const targetUserId in users) {
-                        users[targetUserId].coins += parseInt(amount);
-                    }
-                    await saveData();
-                    replyText = `全員に${amount}コインを付与しました。`;
-                }
-
-                if (userMessage.startsWith("coinnotgive:")) {
-                    const [_, targetId, amount] = userMessage.split(":");
-                    users[targetId].coins -= parseInt(amount);
-                    await saveData();
-                    replyText = `${targetId}から${amount}コインを剥奪しました。`;
-                }
-
-                if (userMessage.startsWith("allcoinnotgive:")) {
-                    const [_, amount] = userMessage.split(":");
-                    for (const targetUserId in users) {
-                        users[targetUserId].coins -= parseInt(amount);
-                    }
-                    await saveData();
-                    replyText = `全員から${amount}コインを剥奪しました。`;
-                }
-
-                if (userMessage.startsWith("権限付与:")) {
-                    const [_, targetId] = userMessage.split(":");
-                    users[targetId].role = "権限者";
-                    await saveData();
-                    replyText = `${targetId}に権限者を付与しました。`;
-                }
-
-                if (userMessage.startsWith("権限削除:")) {
-                    const [_, targetId] = userMessage.split(":");
-                    users[targetId].role = "非権限者";
-                    await saveData();
-                    replyText = `${targetId}から権限者を削除しました。`;
-                }
-            }
-
-            // 退出コマンド（権限者以上）
-            if (userRole === "権限者" || userRole === "最高者") {
-                if (userMessage === "退出") {
-                    replyText = "グループから退出します。";
-                    // ここで実際にLINE Botがグループから退出するコードを追加します
-                }
-            }
-
-            // おみくじ機能（誰でも）
-            if (userMessage === "おみくじ") {
-                const fortune = ["大吉", "吉", "中吉", "小吉", "凶"];
-                const randomFortune = fortune[Math.floor(Math.random() * fortune.length)];
-                replyText = `おみくじ結果: ${randomFortune}`;
-            }
-
-            // 返信
-            if (replyText) {
-                await client.replyMessage(replyToken, {
-                    type: 'text',
-                    text: replyText
-                });
-            }
+        } else if (userMessage.startsWith("coingive:")) {
+            if (permissions[userId] !== "最高者") return;
+            const [_, targetId, amount] = userMessage.split(":");
+            coins[targetId] = (coins[targetId] || 0) + parseInt(amount);
+            await sendReply(replyToken, `${targetId} に ${amount} コイン付与しました。`);
+        } else if (userMessage.startsWith("allcoingive:")) {
+            if (permissions[userId] !== "最高者") return;
+            const amount = parseInt(userMessage.split(":")[1]);
+            for (const id in coins) coins[id] += amount;
+            await sendReply(replyToken, `全員に ${amount} コイン付与しました。`);
+        } else if (userMessage.startsWith("coinnotgive:")) {
+            if (permissions[userId] !== "最高者") return;
+            const [_, targetId, amount] = userMessage.split(":");
+            coins[targetId] = Math.max(0, (coins[targetId] || 0) - parseInt(amount));
+            await sendReply(replyToken, `${targetId} から ${amount} コイン剥奪しました。`);
+        } else if (userMessage.startsWith("allcoinnotgive:")) {
+            if (permissions[userId] !== "最高者") return;
+            const amount = parseInt(userMessage.split(":")[1]);
+            for (const id in coins) coins[id] = Math.max(0, coins[id] - amount);
+            await sendReply(replyToken, `全員から ${amount} コイン剥奪しました。`);
+        } else if (userMessage.startsWith("権限付与:")) {
+            if (permissions[userId] !== "最高者") return;
+            permissions[userMessage.split(":")[1]] = "権限者";
+            await sendReply(replyToken, "権限を付与しました。");
+        } else if (userMessage.startsWith("権限削除:")) {
+            if (permissions[userId] !== "最高者") return;
+            permissions[userMessage.split(":")[1]] = "非権限者";
+            await sendReply(replyToken, "権限を削除しました。");
+        } else if (userMessage.startsWith("key:")) {
+            if (permissions[userId] !== "権限者" && permissions[userId] !== "最高者") return;
+            const [_, key, response] = userMessage.split(":");
+            keywords[key] = response;
+            await sendReply(replyToken, "キーワード応答を設定しました。");
+        } else if (userMessage.startsWith("notkey:")) {
+            if (permissions[userId] !== "権限者" && permissions[userId] !== "最高者") return;
+            delete keywords[userMessage.split(":")[1]];
+            await sendReply(replyToken, "キーワード応答を削除しました。");
+        } else if (userMessage === "おみくじ") {
+            const results = ["大吉", "中吉", "小吉", "末吉", "凶"];
+            const fortune = results[Math.floor(Math.random() * results.length)];
+            await sendReply(replyToken, `おみくじ結果: ${fortune}`);
+        } else if (keywords[userMessage]) {
+            await sendReply(replyToken, keywords[userMessage]);
         }
     }
-
-    res.status(200).send("OK");
+    writeFileSafe(DATA_FILE, permissions);
+    writeFileSafe(COINS_FILE, coins);
+    writeFileSafe(KEYWORDS_FILE, keywords);
+    res.sendStatus(200);
 });
 
-// サーバー開始
-app.listen(3000, () => {
-    console.log("Server is running on port 3000");
-});
+async function sendReply(replyToken, message) {
+    await axios.post("https://api.line.me/v2/bot/message/reply", {
+        replyToken,
+        messages: [{ type: "text", text: message }]
+    }, {
+        headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+    });
+}
+
+app.listen(3000, () => console.log("Server is running on port 3000"));
