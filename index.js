@@ -1,268 +1,256 @@
-const ACCESS_TOKEN = 'Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU='; // LINEアクセストークン
-
 const express = require("express");
-const axios = require("axios");
+const bodyParser = require("body-parser");
+const line = require("@line/bot-sdk");
 const fs = require("fs");
-
 const app = express();
-app.use(express.json());
 
-const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
-const MESSAGE_LOG = "messages.json"; // メッセージ履歴を保存するJSONファイル
-const COINS_FILE = "coins.json"; // コイン情報を保存するJSONファイル
-const KEYWORDS_FILE = "keywords.json"; // キーワード応答を保存するファイル
+// LINE Botの設定
+const config = {
+    channelAccessToken: "Mu985kf4FZjKa6As052f48YrbDQrJTsy65b6cxt6FXjGoiZSiKxSxmaYJQhst2DcBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeRkNq2eH9mm2HxHu6i3mINmKTqF8lUZzAM1CISAWU3jKgdB04t89/1O/w1cDnyilFU=",
+    channelSecret: "3f32c3ed37eb7b876eed85d378fe76fc"
+};
 
-// 管理者のユーザーIDを設定（固定）
-const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
+const client = new line.Client(config);
 
-// タイムアウト付きのファイル読み込み関数
-const loadFileWithTimeout = (filePath, timeout = 5000) => {
+// ファイルパス
+const coinsFilePath = "./coins.json";
+const messagesFilePath = "./messages.json";
+const rolesFilePath = "./roles.json";
+
+// ファイル読み込み関数（タイムアウト処理付き）
+function readFileWithTimeout(filePath, timeout = 5000) {
     return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject('タイムアウト'), timeout);
-        fs.readFile(filePath, "utf-8", (err, data) => {
+        const timer = setTimeout(() => reject("ファイル読み込みタイムアウト"), timeout);
+        fs.readFile(filePath, "utf8", (err, data) => {
             clearTimeout(timer);
-            if (err) return reject(err);
-            try {
-                resolve(JSON.parse(data));
-            } catch (parseError) {
-                reject('パースエラー');
-            }
+            if (err) reject(err);
+            else resolve(JSON.parse(data));
         });
     });
+}
+
+// ファイル保存関数
+function saveFile(filePath, data) {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// ユーザーIDを保持する初期データ
+const initialData = {
+    roles: {},
+    coins: {},
+    messages: {}
 };
 
-// ファイルへの書き込み関数
-const saveToFile = (filePath, data) => {
+// 初期化（データが存在しない場合に初期データを作成）
+async function initialize() {
     try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-    } catch (error) {
-        console.error("ファイル保存エラー:", error);
+        await readFileWithTimeout(rolesFilePath);
+    } catch (err) {
+        saveFile(rolesFilePath, initialData.roles);
     }
-};
-
-// 権限データを読み込む
-const loadPermissions = async () => {
     try {
-        return await loadFileWithTimeout(DATA_FILE);
-    } catch (error) {
-        return {}; // エラーが発生した場合は空のオブジェクトを返す
+        await readFileWithTimeout(coinsFilePath);
+    } catch (err) {
+        saveFile(coinsFilePath, initialData.coins);
     }
-};
-
-// コインデータを読み込む
-const loadCoins = async () => {
     try {
-        return await loadFileWithTimeout(COINS_FILE);
-    } catch (error) {
-        return {}; // エラーが発生した場合は空のオブジェクトを返す
+        await readFileWithTimeout(messagesFilePath);
+    } catch (err) {
+        saveFile(messagesFilePath, initialData.messages);
     }
+}
+
+initialize();
+
+// 権限管理
+const roles = {
+    "最高者": 1,
+    "権限者": 2,
+    "非権限者": 3
 };
 
-// キーワード応答データを読み込む
-const loadKeywords = async () => {
-    try {
-        return await loadFileWithTimeout(KEYWORDS_FILE);
-    } catch (error) {
-        return {}; // エラーが発生した場合は空のオブジェクトを返す
-    }
-};
+// メッセージ送信の処理
+function sendReply(replyToken, text) {
+    return client.replyMessage(replyToken, { type: "text", text });
+}
 
-// 権限を取得する
-const getUserRole = (userId) => {
-    return permissions[userId] || "非権限者";  // 権限がない場合は「非権限者」
-};
-
-// Webhookエンドポイント
-app.post("/webhook", async (req, res) => {
-    // 最初に200 OKを返す
-    res.sendStatus(200);
-
+// コマンドの処理
+app.post("/webhook", bodyParser.json(), async (req, res) => {
     const events = req.body.events;
-    const coins = await loadCoins(); // コイン情報を読み込む
-    const permissions = await loadPermissions(); // 権限情報を読み込む
-    const keywords = await loadKeywords(); // キーワード情報を読み込む
-    const messages = await loadMessages(); // メッセージ履歴を読み込む
-
-    const sendReply = async (replyToken, replyText) => {
-        try {
-            await axios.post("https://api.line.me/v2/bot/message/reply", {
-                replyToken: replyToken,
-                messages: [{ type: "text", text: replyText }]
-            }, {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${ACCESS_TOKEN}`
-                },
-                timeout: 5000 // タイムアウトを5秒に設定
-            });
-        } catch (error) {
-            console.error('エラー発生:', error);
-        }
-    };
-
-    for (const event of events) {
-        if (!event.replyToken) continue; // replyTokenがない場合は処理しない
-
+    for (let event of events) {
         const replyToken = event.replyToken;
         const userId = event.source.userId;
-        const userRole = getUserRole(userId);
+        const userMessage = event.message.text;
 
-        let replyText = null;
+        let replyText = "";
 
-        // メッセージ受信イベント
-        if (event.type === "message" && event.message?.text) {
-            const userMessage = event.message.text;
+        // 権限の取得（ファイルから）
+        const rolesData = await readFileWithTimeout(rolesFilePath);
+        const coinsData = await readFileWithTimeout(coinsFilePath);
+        const messagesData = await readFileWithTimeout(messagesFilePath);
 
-            // キーワード応答
-            if (keywords[userMessage]) {
-                replyText = keywords[userMessage];
+        let userRole = rolesData[userId] || "非権限者";
+        let userCoins = coinsData[userId] || 0;
+
+        // 権限チェック
+        const checkRole = (role) => roles[userRole] <= roles[role];
+
+        // キーワード応答（常時実行）
+        if (userMessage.startsWith("key:")) {
+            const [_, keyword, response] = userMessage.split(":");
+            messagesData[keyword] = response;
+            saveFile(messagesFilePath, messagesData);
+            replyText = `キーワード「${keyword}」に対する応答を設定しました。`;
+        }
+
+        // ID応答（常時実行）
+        if (userMessage.startsWith("say:")) {
+            const [_, targetId, response] = userMessage.split(":");
+            messagesData[targetId] = response;
+            saveFile(messagesFilePath, messagesData);
+            replyText = `${targetId}へのメッセージを設定しました。`;
+        }
+
+        // ①ユーザーの権限状態送信
+        if (userMessage === "権限") {
+            replyText = `あなたの現在の権限は「${userRole}」です。`;
+        }
+
+        // ②checkコマンドでユーザーID送信
+        if (userMessage === "check") {
+            replyText = `あなたのIDは「${userId}」です。`;
+        }
+
+        // ③コイン残高表示
+        if (userMessage === "コイン") {
+            replyText = `あなたの残りコインは「${userCoins}」です。`;
+        }
+
+        // ④スロット
+        if (userMessage === "スロット" && userCoins >= 1) {
+            userCoins -= 1;
+            const slotResult = Math.floor(Math.random() * 10); // ランダムでスロット結果
+            if (slotResult === 7) {
+                userCoins += 10; // 当たり
+                replyText = `おめでとうございます！ 10コインを獲得しました。残りコインは「${userCoins}」です。`;
+            } else {
+                replyText = `残念！残りコインは「${userCoins}」です。`;
             }
+            coinsData[userId] = userCoins;
+            saveFile(coinsFilePath, coinsData);
+        }
 
-            // メッセージを記録
-            messages[event.message.id] = userMessage;
-            saveToFile(MESSAGE_LOG, messages);
+        // ⑥個人にコインを付与するコマンド（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("coingive:")) {
+            const [_, targetId, amount] = userMessage.split(":");
+            coinsData[targetId] = (coinsData[targetId] || 0) + parseInt(amount);
+            saveFile(coinsFilePath, coinsData);
+            replyText = `${targetId}に${amount}コインを付与しました。`;
+        }
 
-            // 権限コマンド
-            if (userMessage === "権限") {
-                replyText = `あなたの権限は: ${userRole}`;
-            } 
-            // checkコマンド
-            else if (userMessage === "check") {
-                replyText = `あなたのIDは: ${userId}`;
+        // ⑦全員にコインを付与するコマンド（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("allcoingive:")) {
+            const [_, amount] = userMessage.split(":");
+            for (let targetUserId in coinsData) {
+                coinsData[targetUserId] += parseInt(amount);
             }
-            // コインコマンド
-            else if (userMessage === "コイン") {
-                replyText = `あなたの残りコインは: ${coins[userId] || 0}`;
+            saveFile(coinsFilePath, coinsData);
+            replyText = `全員に${amount}コインを付与しました。`;
+        }
+
+        // ⑧個人にコインを剥奪するコマンド（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("coinnotgive:")) {
+            const [_, targetId, amount] = userMessage.split(":");
+            coinsData[targetId] = (coinsData[targetId] || 0) - parseInt(amount);
+            saveFile(coinsFilePath, coinsData);
+            replyText = `${targetId}から${amount}コインを剥奪しました。`;
+        }
+
+        // ⑨全員からコインを剥奪するコマンド（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("allcoinnotgive:")) {
+            const [_, amount] = userMessage.split(":");
+            for (let targetUserId in coinsData) {
+                coinsData[targetUserId] -= parseInt(amount);
             }
-            // スロットコマンド
-            else if (userMessage === "スロット") {
-                const userCoins = coins[userId] || 0;
+            saveFile(coinsFilePath, coinsData);
+            replyText = `全員から${amount}コインを剥奪しました。`;
+        }
 
-                if (userCoins < 1) {
-                    replyText = "コインが足りません。";
-                } else {
-                    coins[userId] = userCoins - 1; // コインを1つ消費
-                    const slot = spinSlot();
-                    const result = checkSlotResult(slot);
+        // ⑩権限付与:ID（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("権限付与:")) {
+            const [_, targetId] = userMessage.split(":");
+            rolesData[targetId] = "権限者";
+            saveFile(rolesFilePath, rolesData);
+            replyText = `${targetId}に権限を付与しました。`;
+        }
 
-                    coins[userId] += result; // 結果に応じてコインを加算
-                    saveToFile(COINS_FILE, coins);
+        // ⑪権限削除:ID（最高者のみ）
+        if (checkRole("最高者") && userMessage.startsWith("権限削除:")) {
+            const [_, targetId] = userMessage.split(":");
+            rolesData[targetId] = "非権限者";
+            saveFile(rolesFilePath, rolesData);
+            replyText = `${targetId}の権限を削除しました。`;
+        }
 
-                    replyText = `スロット結果: ${slot.join(" | ")}\nあなたの残りコイン: ${coins[userId]}\n${result > 0 ? `おめでとうございます！${result}コインゲット！` : "残念、次回頑張ってください！"}`;
-                }
-            }
+        // ⑫ID応答（特定のIDのメッセージに反応するコマンド、権限者以上）
+        if (checkRole("権限者") && userMessage.startsWith("say:")) {
+            const [_, targetId, message] = userMessage.split(":");
+            messagesData[targetId] = message;
+            saveFile(messagesFilePath, messagesData);
+            replyText = `${targetId}にメッセージを設定しました。`;
+        }
 
-            // おみくじコマンド
-            else if (userMessage === "おみくじ") {
-                const result = fortunes[Math.floor(Math.random() * fortunes.length)];
-                replyText = `おみくじの結果: ${result}`;
-            }
+        // ⑬say削除コマンド（権限者以上）
+        if (checkRole("権限者") && userMessage.startsWith("notsay:")) {
+            const [_, targetId] = userMessage.split(":");
+            delete messagesData[targetId];
+            saveFile(messagesFilePath, messagesData);
+            replyText = `${targetId}のメッセージを削除しました。`;
+        }
 
-            // 0コインのユーザーにメッセージを表示
-            else if (coins[userId] === 0) {
-                replyText = "コインが足りません。最高者に言ってください。";
-            }
+        // ⑭キーワード応答設定（権限者以上）
+        if (checkRole("権限者") && userMessage.startsWith("key:")) {
+            const [_, keyword, response] = userMessage.split(":");
+            messagesData[keyword] = response;
+            saveFile(messagesFilePath, messagesData);
+            replyText = `キーワード「${keyword}」に応答内容を設定しました。`;
+        }
 
-            // 最高者のみ権限付与・削除
-            else if (userRole === "最高者") {
-                if (userMessage.startsWith("権限付与:")) {
-                    const targetUserId = userMessage.split(":")[1];
-                    permissions[targetUserId] = "権限者";
-                    saveToFile(DATA_FILE, permissions);
-                    replyText = `${targetUserId}に権限を付与しました。`;
-                }
-                else if (userMessage.startsWith("権限削除:")) {
-                    const targetUserId = userMessage.split(":")[1];
-                    permissions[targetUserId] = "非権限者";
-                    saveToFile(DATA_FILE, permissions);
-                    replyText = `${targetUserId}の権限を削除しました。`;
-                }
+        // ⑮キーワード削除（権限者以上）
+        if (checkRole("権限者") && userMessage.startsWith("notkey:")) {
+            const [_, keyword] = userMessage.split(":");
+            delete messagesData[keyword];
+            saveFile(messagesFilePath, messagesData);
+            replyText = `キーワード「${keyword}」の応答を削除しました。`;
+        }
 
-                if (userMessage.startsWith("coingive:")) {
-                    const [_, targetUserId, amount] = userMessage.split(":");
-                    coins[targetUserId] = (coins[targetUserId] || 0) + parseInt(amount);
-                    saveToFile(COINS_FILE, coins);
-                    replyText = `${targetUserId}に${amount}コインを付与しました。`;
-                }
+        // ⑯0コインの人にメッセージ
+        if (userCoins === 0) {
+            replyText = `あなたの残りコインは0です。最高者に問い合わせてください。`;
+        }
 
-                if (userMessage.startsWith("coinnotgive:")) {
-                    const [_, targetUserId, amount] = userMessage.split(":");
-                    coins[targetUserId] = (coins[targetUserId] || 0) - parseInt(amount);
-                    saveToFile(COINS_FILE, coins);
-                    replyText = `${targetUserId}から${amount}コインを剥奪しました。`;
-                }
+        // ⑰おみくじコマンド
+        if (userMessage === "おみくじ") {
+            const result = ["大吉", "吉", "中吉", "凶", "大凶"][Math.floor(Math.random() * 5)];
+            replyText = `おみくじの結果は「${result}」です。`;
+        }
 
-                if (userMessage.startsWith("allcoingive:")) {
-                    const amount = parseInt(userMessage.split(":")[1]);
-                    for (const targetUserId in coins) {
-                        coins[targetUserId] += amount;
-                    }
-                    saveToFile(COINS_FILE, coins);
-                    replyText = `全員に${amount}コインを付与しました。`;
-                }
+        // ⑱招待者が非権限者の場合退出
+        if (event.source.type === "group" && event.source.userId !== "U9a952e1e4e8580107b52b5f5fd4f0ab3") {
+            await client.leaveGroup(event.source.groupId);
+            replyText = "あなたは権限がないため、グループを退出しました。";
+        }
 
-                if (userMessage.startsWith("allcoinnotgive:")) {
-                    const amount = parseInt(userMessage.split(":")[1]);
-                    for (const targetUserId in coins) {
-                        coins[targetUserId] -= amount;
-                    }
-                    saveToFile(COINS_FILE, coins);
-                    replyText = `全員から${amount}コインを剥奪しました。`;
-                }
-            }
-
-            // じゃんけん
-            else if (userMessage === "じゃんけん") {
-                const handOptions = ["グー", "チョキ", "パー"];
-                const userHand = handOptions[Math.floor(Math.random() * 3)];
-                const botHand = handOptions[Math.floor(Math.random() * 3)];
-
-                replyText = `あなたの手: ${userHand}\nBotの手: ${botHand}\n結果: ${getJankenResult(userHand, botHand)}`;
-            }
-
-            // 権限者以上
-            if (userRole === "権限者" || userRole === "最高者") {
-                if (userMessage.startsWith("say:")) {
-                    const [_, targetId, message] = userMessage.split(":");
-                    messages[targetId] = message;
-                    saveToFile(MESSAGE_LOG, messages);
-                    replyText = `${targetId}のメッセージを設定しました。`;
-                }
-            }
-
-            // 最終返信
-            if (replyText) {
-                await sendReply(replyToken, replyText);
-            }
+        // 返信
+        if (replyText) {
+            await sendReply(replyToken, replyText);
         }
     }
+
+    res.status(200).send("OK");
 });
 
-// じゃんけんの結果を返す関数
-function getJankenResult(userHand, botHand) {
-    if (userHand === botHand) return "引き分け";
-    if ((userHand === "グー" && botHand === "チョキ") || 
-        (userHand === "チョキ" && botHand === "パー") || 
-        (userHand === "パー" && botHand === "グー")) return "勝ち";
-    return "負け";
-}
-
-// スロットを回す
-function spinSlot() {
-    return [Math.floor(Math.random() * 7), Math.floor(Math.random() * 7), Math.floor(Math.random() * 7)];
-}
-
-// スロットの結果を確認する
-function checkSlotResult(slot) {
-    const [a, b, c] = slot;
-    if (a === b && b === c) {
-        if (a === 7) return 777;
-        return 10; // その他の同じ数字は10コイン
-    }
-    return 0; // 当たりなし
-}
-
-// サーバーを起動
+// サーバーを起動する
 app.listen(3000, () => {
     console.log("Server is running on port 3000");
 });
