@@ -1,264 +1,309 @@
-const express = require('express');
-const axios = require('axios');
-const fs = require('fs');
-const app = express();
+const ACCESS_TOKEN = 'scim9t3j5eY+OB6O0hgo32s1olzFkxqC0f2U7CWcy30k1R3orR5uNc+disMdUHIRBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeR85MS+I2YYt+23YrzC88zIhizNU8cGhNS/eurmqB6n8AdB04t89/1O/w1cDnyilFU='; // LINEアクセストークン
 
+const express = require("express");
+const axios = require("axios");
+const fs = require("fs");
+
+const app = express();
 app.use(express.json());
 
-const ACCESS_TOKEN = 'scim9t3j5eY+OB6O0hgo32s1olzFkxqC0f2U7CWcy30k1R3orR5uNc+disMdUHIRBBRkYeUpRWEuc56sL5UQmGZsMLpCj3F3nCGZCBFgCeR85MS+I2YYt+23YrzC88zIhizNU8cGhNS/eurmqB6n8AdB04t89/1O/w1cDnyilFU='; // LINEアクセストークン
-const DATA_FILE = 'permissions.json';  // 権限を保存するJSONファイル
-const MESSAGE_LOG = 'messages.json'; // メッセージ履歴を保存するJSONファイル
-const COINS_FILE = 'coins.json'; // コイン情報を保存するJSONファイル
-const KEYWORDS_FILE = 'keywords.json'; // キーワード応答を保存するファイル
-const BLACKLIST_FILE = 'blacklist.json'; // ブラックリスト情報
+const DATA_FILE = "permissions.json";  // 権限を保存するJSONファイル
+const MESSAGE_LOG = "messages.json"; // メッセージ履歴を保存するJSONファイル
+const COINS_FILE = "coins.json"; // コイン情報を保存するJSONファイル
+const KEYWORDS_FILE = "keywords.json"; // キーワード応答を保存するファイル
+const BLACKLIST_FILE = "blacklist.json"; // ブラックリスト情報を保存するファイル
 
 // 管理者のユーザーIDを設定（固定）
-const adminUserId = 'U9a952e1e4e8580107b52b5f5fd4f0ab3';  // 管理者のLINE ID
+const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
 
-// 権限、コイン、キーワード、ブラックリストを読み込み（非同期でタイムアウト付き）
-const readFileWithTimeout = (file, timeout = 5000) => {
+// 初期化
+function initializeData() {
+  if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({}));
+  }
+  if (!fs.existsSync(COINS_FILE)) {
+    fs.writeFileSync(COINS_FILE, JSON.stringify({}));
+  }
+  if (!fs.existsSync(KEYWORDS_FILE)) {
+    fs.writeFileSync(KEYWORDS_FILE, JSON.stringify({}));
+  }
+  if (!fs.existsSync(BLACKLIST_FILE)) {
+    fs.writeFileSync(BLACKLIST_FILE, JSON.stringify([]));
+  }
+}
+
+// ファイル読み込み関数にタイムアウト処理を追加
+function readFileWithTimeout(filePath, timeout = 5000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('File read timeout')), timeout);
-    fs.readFile(file, 'utf8', (err, data) => {
+    const timer = setTimeout(() => reject('File read timeout'), timeout);
+    fs.readFile(filePath, 'utf8', (err, data) => {
       clearTimeout(timer);
       if (err) return reject(err);
       resolve(JSON.parse(data));
     });
   });
-};
+}
 
-// 初期データ読み込み
-let permissions = {};
-let coins = {};
-let keywords = {};
-let blacklist = [];
+// ファイル書き込み関数
+function writeFileWithTimeout(filePath, data, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject('File write timeout'), timeout);
+    fs.writeFile(filePath, JSON.stringify(data), (err) => {
+      clearTimeout(timer);
+      if (err) return reject(err);
+      resolve();
+    });
+  });
+}
 
-Promise.all([
-  readFileWithTimeout(DATA_FILE),
-  readFileWithTimeout(COINS_FILE),
-  readFileWithTimeout(KEYWORDS_FILE),
-  readFileWithTimeout(BLACKLIST_FILE)
-])
-  .then(([permissionsData, coinsData, keywordsData, blacklistData]) => {
-    permissions = permissionsData || {};
-    coins = coinsData || {};
-    keywords = keywordsData || {};
-    blacklist = blacklistData || [];
-  })
-  .catch(err => console.error('Error loading files:', err));
+// コイン初期化
+function initializeCoins() {
+  const coins = JSON.parse(fs.readFileSync(COINS_FILE, 'utf8'));
+  Object.keys(coins).forEach(userId => {
+    if (coins[userId] === undefined) {
+      coins[userId] = 20; // 初期コイン
+    }
+  });
+  writeFileWithTimeout(COINS_FILE, coins);
+}
 
-// ユーザーIDと権限を送信
-const getUserPermission = (userId) => {
-  return permissions[userId] || '非権限者';
-};
+// 初期化実行
+initializeData();
+initializeCoins();
 
-// ユーザーIDとコインを送信
-const getUserCoins = (userId) => {
-  return coins[userId] || 20;
-};
-
-// メッセージ受信時の処理
-app.post('/webhook', (req, res) => {
+// LINE Webhookイベント処理
+app.post("/webhook", async (req, res) => {
   const events = req.body.events;
-
-  events.forEach(event => {
+  if (events && events.length > 0) {
+    const event = events[0];
     const userId = event.source.userId;
-    const text = event.message.text.trim();
+    const replyToken = event.replyToken;
+    const message = event.message.text;
 
-    if (blacklist.includes(userId)) return;
+    try {
+      let data = await readFileWithTimeout(DATA_FILE);
+      let coins = await readFileWithTimeout(COINS_FILE);
+      let keywords = await readFileWithTimeout(KEYWORDS_FILE);
+      let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
 
-    if (text === '権限') {
-      // 権限確認
-      return replyMessage(event.replyToken, `あなたの権限は ${getUserPermission(userId)} です。`);
-    }
-
-    if (text === 'check') {
-      // ユーザーID確認
-      return replyMessage(event.replyToken, `あなたのIDは ${userId} です。`);
-    }
-
-    if (text === 'コイン') {
-      // コイン確認
-      return replyMessage(event.replyToken, `あなたの残コインは ${getUserCoins(userId)} コインです。`);
-    }
-
-    if (text === 'スロット' && getUserCoins(userId) > 0) {
-      // スロットゲーム
-      const slotResult = Math.floor(Math.random() * 10);
-      const userCoins = getUserCoins(userId);
-      let reward = 0;
-      let message = 'スロット結果: ';
-
-      if ([1, 2, 3, 4, 5, 6, 8, 9].includes(slotResult)) {
-        reward = 100;
-        message += `当たり！100コイン獲得！`;
-      } else if (slotResult === 7) {
-        reward = 777;
-        message += `777コイン獲得！`;
-      } else {
-        message += '外れ';
+      // 1. キーワード応答とID応答
+      if (keywords[message]) {
+        await reply(replyToken, keywords[message]);
+        return;
       }
 
-      coins[userId] = userCoins - 1 + reward;
-      fs.writeFileSync(COINS_FILE, JSON.stringify(coins, null, 2));
-      return replyMessage(event.replyToken, `${message}\n残りコイン: ${coins[userId]}`);
-    }
-
-    // 管理者だけのコマンド
-    if (getUserPermission(userId) === '最高者') {
-      if (text.startsWith('coingive:')) {
-        // 個別コイン付与
-        const [_, targetId, amount] = text.split(':');
-        coins[targetId] = (coins[targetId] || 0) + parseInt(amount, 10);
-        fs.writeFileSync(COINS_FILE, JSON.stringify(coins, null, 2));
-        return replyMessage(event.replyToken, `${targetId} に ${amount} コインを付与しました。`);
+      // 2. 権限と送るとその人の権限状態を送る
+      if (message === '権限') {
+        const permission = data[userId] || '非権限者';
+        await reply(replyToken, `あなたの権限は: ${permission}`);
       }
 
-      if (text.startsWith('allcoingive:')) {
-        // 全コイン付与
-        const [_, amount] = text.split(':');
-        Object.keys(coins).forEach(id => {
-          coins[id] = (coins[id] || 0) + parseInt(amount, 10);
-        });
-        fs.writeFileSync(COINS_FILE, JSON.stringify(coins, null, 2));
-        return replyMessage(event.replyToken, `全ユーザーに ${amount} コインを付与しました。`);
+      // 3. checkと送るとその人のIDを送る
+      if (message === 'check') {
+        await reply(replyToken, `あなたのIDは: ${userId}`);
       }
 
-      if (text.startsWith('coinnotgive:')) {
-        // 個別コイン剥奪
-        const [_, targetId, amount] = text.split(':');
-        coins[targetId] = (coins[targetId] || 0) - parseInt(amount, 10);
-        fs.writeFileSync(COINS_FILE, JSON.stringify(coins, null, 2));
-        return replyMessage(event.replyToken, `${targetId} から ${amount} コインを剥奪しました。`);
+      // 4. コインと送るとその人の残コインを送る
+      if (message === 'コイン') {
+        const userCoins = coins[userId] || 0;
+        await reply(replyToken, `あなたの残りコインは: ${userCoins}`);
       }
 
-      if (text.startsWith('allcoinnotgive:')) {
-        // 全コイン剥奪
-        const [_, amount] = text.split(':');
-        Object.keys(coins).forEach(id => {
-          coins[id] = (coins[id] || 0) - parseInt(amount, 10);
-        });
-        fs.writeFileSync(COINS_FILE, JSON.stringify(coins, null, 2));
-        return replyMessage(event.replyToken, `全ユーザーから ${amount} コインを剥奪しました。`);
-      }
-
-      if (text.startsWith('権限:')) {
-        // 権限付与
-        const [_, targetId] = text.split(':');
-        permissions[targetId] = '権限者';
-        fs.writeFileSync(DATA_FILE, JSON.stringify(permissions, null, 2));
-        return replyMessage(event.replyToken, `${targetId} に権限を付与しました。`);
-      }
-
-      if (text.startsWith('not権限:')) {
-        // 権限削除
-        const [_, targetId] = text.split(':');
-        permissions[targetId] = '非権限者';
-        fs.writeFileSync(DATA_FILE, JSON.stringify(permissions, null, 2));
-        return replyMessage(event.replyToken, `${targetId} の権限を削除しました。`);
-      }
-    }
-
-    // 権限者以上のコマンド
-    if (['最高者', '権限者'].includes(getUserPermission(userId))) {
-      if (text.startsWith('say:')) {
-        // ID応答: メッセージを受信時に特定の言葉を話す
-        const [_, targetId, words] = text.split(':');
-        keywords[targetId] = words;
-        fs.writeFileSync(KEYWORDS_FILE, JSON.stringify(keywords, null, 2));
-        return replyMessage(event.replyToken, `ID ${targetId} に応答内容を設定しました。`);
-      }
-
-      if (text.startsWith('notsay:')) {
-        // ID応答: メッセージを受信時に特定の言葉を消す
-        const [_, targetId] = text.split(':');
-        delete keywords[targetId];
-        fs.writeFileSync(KEYWORDS_FILE, JSON.stringify(keywords, null, 2));
-        return replyMessage(event.replyToken, `ID ${targetId} の応答内容を削除しました。`);
-      }
-
-      if (text.startsWith('key:')) {
-        // キーワード応答設定
-        const [_, keyword, response] = text.split(':');
-        keywords[keyword] = response;
-        fs.writeFileSync(KEYWORDS_FILE, JSON.stringify(keywords, null, 2));
-        return replyMessage(event.replyToken, `キーワード「${keyword}」に応答「${response}」を設定しました。`);
-      }
-
-      if (text.startsWith('notkey:')) {
-        // キーワード応答削除
-        const [_, keyword] = text.split(':');
-        delete keywords[keyword];
-        fs.writeFileSync(KEYWORDS_FILE, JSON.stringify(keywords, null, 2));
-        return replyMessage(event.replyToken, `キーワード「${keyword}」の応答を削除しました。`);
-      }
-
-      if (text === 'ブラックリスト') {
-        // ブラックリスト一覧
-        return replyMessage(event.replyToken, `ブラックリスト: ${blacklist.join(', ')}`);
-      }
-
-      if (text.startsWith('black:')) {
-        // ブラックリストに登録
-        const [_, targetId] = text.split(':');
-        if (!blacklist.includes(targetId)) {
-          blacklist.push(targetId);
-          fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(blacklist, null, 2));
-          return replyMessage(event.replyToken, `${targetId} をブラックリストに登録しました。`);
+      // 5. スロット
+      if (message === 'スロット') {
+        const userCoins = coins[userId] || 0;
+        if (userCoins >= 1) {
+          coins[userId] = userCoins - 1; // コインを消費
+          const result = slotMachine();
+          const reward = getSlotReward(result);
+          if (reward) {
+            coins[userId] += reward;
+            await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${coins[userId]}`);
+          } else {
+            await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${coins[userId]}`);
+          }
+          writeFileWithTimeout(COINS_FILE, coins);
+        } else {
+          await reply(replyToken, 'コインが足りません。最高者にコインの付与を依頼してください。');
         }
       }
 
-      if (text.startsWith('notblack:')) {
-        // ブラックリストから削除
-        const [_, targetId] = text.split(':');
-        blacklist = blacklist.filter(id => id !== targetId);
-        fs.writeFileSync(BLACKLIST_FILE, JSON.stringify(blacklist, null, 2));
-        return replyMessage(event.replyToken, `${targetId} をブラックリストから削除しました。`);
+      // 6-11. 最高者専用コマンド
+      if (userId === adminUserId) {
+        // ⑥ 個人にコインを付与
+        if (message.startsWith('coingive:')) {
+          const [_, targetUserId, amount] = message.split(':');
+          coins[targetUserId] = (coins[targetUserId] || 0) + parseInt(amount);
+          await reply(replyToken, `ユーザー ${targetUserId} に ${amount} コインを付与しました。`);
+          writeFileWithTimeout(COINS_FILE, coins);
+        }
+        // ⑦ 全てのコインを付与
+        if (message.startsWith('allcoingive:')) {
+          const amount = message.split(':')[1];
+          for (const user in coins) {
+            coins[user] += parseInt(amount);
+          }
+          await reply(replyToken, `全てのユーザーに ${amount} コインを付与しました。`);
+          writeFileWithTimeout(COINS_FILE, coins);
+        }
+        // ⑧ 個人にコインを剥奪
+        if (message.startsWith('coinnotgive:')) {
+          const [_, targetUserId, amount] = message.split(':');
+          coins[targetUserId] = (coins[targetUserId] || 0) - parseInt(amount);
+          await reply(replyToken, `ユーザー ${targetUserId} から ${amount} コインを剥奪しました。`);
+          writeFileWithTimeout(COINS_FILE, coins);
+        }
+        // ⑨ 全てのコインを剥奪
+        if (message.startsWith('allcoinnotgive:')) {
+          const amount = message.split(':')[1];
+          for (const user in coins) {
+            coins[user] -= parseInt(amount);
+          }
+          await reply(replyToken, `全てのユーザーから ${amount} コインを剥奪しました。`);
+          writeFileWithTimeout(COINS_FILE, coins);
+        }
+        // 10. 権限を付与
+        if (message.startsWith('権限付与:')) {
+          const targetUserId = message.split(':')[1];
+          data[targetUserId] = '権限者';
+          await reply(replyToken, `ユーザー ${targetUserId} に権限を付与しました。`);
+          writeFileWithTimeout(DATA_FILE, data);
+        }
+        // 11. 権限を剥奪
+        if (message.startsWith('権限削除:')) {
+          const targetUserId = message.split(':')[1];
+          data[targetUserId] = '非権限者';
+          await reply(replyToken, `ユーザー ${targetUserId} の権限を剥奪しました。`);
+          writeFileWithTimeout(DATA_FILE, data);
+        }
       }
 
-      if (text === '退出') {
-        // 権限者以上が送るとそのグループから退出
-        return leaveGroup(event.replyToken);
+      // 12-18. 権限者以上ができるコマンド
+      if (data[userId] === '権限者' || data[userId] === '最高者') {
+        // ⑫ 特定のIDにメッセージを送る
+        if (message.startsWith('say:')) {
+          const [_, targetUserId, response] = message.split(':');
+          keywords[targetUserId] = response;
+          await reply(replyToken, `ID ${targetUserId} に対する応答を設定しました。`);
+          writeFileWithTimeout(KEYWORDS_FILE, keywords);
+        }
+        // ⑬ 特定のIDのメッセージを削除
+        if (message.startsWith('notsay:')) {
+          const targetUserId = message.split(':')[1];
+          delete keywords[targetUserId];
+          await reply(replyToken, `ID ${targetUserId} の応答を削除しました。`);
+          writeFileWithTimeout(KEYWORDS_FILE, keywords);
+        }
+        // ⑭ キーワード応答の設定
+        if (message.startsWith('key:')) {
+          const [_, keyword, response] = message.split(':');
+          keywords[keyword] = response;
+          await reply(replyToken, `キーワード「${keyword}」に応答「${response}」を設定しました。`);
+          writeFileWithTimeout(KEYWORDS_FILE, keywords);
+        }
+        // ⑮ キーワード応答の削除
+        if (message.startsWith('notkey:')) {
+          const keyword = message.split(':')[1];
+          delete keywords[keyword];
+          await reply(replyToken, `キーワード「${keyword}」を削除しました。`);
+          writeFileWithTimeout(KEYWORDS_FILE, keywords);
+        }
+        // ⑯ 退出コマンド
+        if (message === '退出') {
+          await leaveGroup();
+        }
+        // ⑰ ブラックリストに登録
+        if (message.startsWith('black:')) {
+          const targetUserId = message.split(':')[1];
+          blacklist.push(targetUserId);
+          await reply(replyToken, `ユーザー ${targetUserId} をブラックリストに登録しました。`);
+          writeFileWithTimeout(BLACKLIST_FILE, blacklist);
+        }
+        // ⑱ ブラックリストから削除
+        if (message.startsWith('notblack:')) {
+          const targetUserId = message.split(':')[1];
+          blacklist = blacklist.filter(id => id !== targetUserId);
+          await reply(replyToken, `ユーザー ${targetUserId} をブラックリストから削除しました。`);
+          writeFileWithTimeout(BLACKLIST_FILE, blacklist);
+        }
       }
-    }
 
-    if (text === 'おみくじ') {
-      // おみくじ機能
-      const fortunes = ['大吉', '中吉', '小吉', '凶'];
-      const fortune = fortunes[Math.floor(Math.random() * fortunes.length)];
-      return replyMessage(event.replyToken, `あなたのおみくじは「${fortune}」です。`);
-    }
-  });
+      // 19. おみくじ
+      if (message === 'おみくじ') {
+        const result = lottery();
+        await reply(replyToken, `おみくじ結果: ${result}`);
+      }
 
-  res.status(200).send('OK');
+      // 20-23. その他のコマンド
+      if (message.startsWith('権限:')) {
+        const targetUserId = message.split(':')[1];
+        const permission = data[targetUserId] || '非権限者';
+        await reply(replyToken, `ユーザー ${targetUserId} の権限: ${permission}`);
+      }
+      if (message.startsWith('check:@')) {
+        const targetUserId = message.split('@')[1];
+        await reply(replyToken, `ID: ${targetUserId}`);
+      }
+      if (message === 'ブラックリスト確認') {
+        await reply(replyToken, `ブラックリスト: ${JSON.stringify(blacklist)}`);
+      }
+      if (message.startsWith('+削除')) {
+        const msgId = message.split(' ')[1];
+        await deleteMessage(msgId);
+        await reply(replyToken, `メッセージ ${msgId} を削除しました。`);
+      }
+
+    } catch (err) {
+      console.error('Error:', err);
+      await reply(replyToken, 'エラーが発生しました。');
+    }
+  }
+  res.sendStatus(200);
 });
 
-// メッセージ返信
-const replyMessage = (replyToken, message) => {
-  axios.post('https://api.line.me/v2/bot/message/reply', {
+// Helper Functions
+async function reply(replyToken, message) {
+  await axios.post('https://api.line.me/v2/bot/message/reply', {
     replyToken,
     messages: [{ type: 'text', text: message }]
   }, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ACCESS_TOKEN}`
-    }
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
   });
-};
+}
 
-// グループ退出
-const leaveGroup = (replyToken) => {
-  axios.post('https://api.line.me/v2/bot/group/leave', {
-    replyToken
-  }, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ACCESS_TOKEN}`
-    }
+function slotMachine() {
+  const symbols = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  return `${symbols[Math.floor(Math.random() * 9)]}${symbols[Math.floor(Math.random() * 9)]}${symbols[Math.floor(Math.random() * 9)]}`;
+}
+
+function getSlotReward(result) {
+  const rewards = {
+    '111': 100,
+    '222': 100,
+    '333': 100,
+    '444': 100,
+    '555': 100,
+    '666': 100,
+    '888': 100,
+    '999': 100,
+    '777': 777
+  };
+  return rewards[result] || 0;
+}
+
+function lottery() {
+  const outcomes = ['大吉', '中吉', '小吉', '凶'];
+  return outcomes[Math.floor(Math.random() * outcomes.length)];
+}
+
+async function leaveGroup() {
+  // グループ退出処理
+}
+
+async function deleteMessage(msgId) {
+  await axios.post('https://api.line.me/v2/bot/message/' + msgId + '/delete', {}, {
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
   });
-};
+}
 
-// サーバー起動
-app.listen(3000, () => {
-  console.log('Server is running on port 3000');
-});
+app.listen(3000, () => console.log('Server is running on port 3000'));
