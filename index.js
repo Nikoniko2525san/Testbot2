@@ -80,11 +80,17 @@ app.post("/webhook", async (req, res) => {
     const replyToken = event.replyToken;
     const message = event.message.text;
 
-    try {
-      let data = await readFileWithTimeout(DATA_FILE);
-      let coins = await readFileWithTimeout(COINS_FILE);
-      let keywords = await readFileWithTimeout(KEYWORDS_FILE);
-      let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
+   try {
+  let data = await readFileWithTimeout(DATA_FILE);
+  let coins = await readFileWithTimeout(COINS_FILE);
+  let keywords = await readFileWithTimeout(KEYWORDS_FILE);
+  let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
+
+  // その他の処理
+} catch (error) {
+  console.error('エラーが発生しました:', error);
+  await reply(replyToken, '処理中にエラーが発生しました。もう一度試してください。');
+}
 
       // 2. ブラックリストに登録されているかをチェック
       if (blacklist.includes(userId)) {
