@@ -16,6 +16,9 @@ const BLACKLIST_FILE = "blacklist.json"; // ブラックリスト情報を保存
 // 管理者のユーザーIDを設定（固定）
 const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
 
+const TIMEOUT = 5000; // タイムアウト時間（ミリ秒）
+
+
 // 初期化
 function initializeData() {
   if (!fs.existsSync(DATA_FILE)) {
