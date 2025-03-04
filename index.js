@@ -16,9 +16,6 @@ const BLACKLIST_FILE = "blacklist.json"; // ブラックリスト情報を保存
 // 管理者のユーザーIDを設定（固定）
 const adminUserId = "U9a952e1e4e8580107b52b5f5fd4f0ab3";  // 自分のLINE IDに変更
 
-const TIMEOUT = 5000; // タイムアウト時間（ミリ秒）
-
-
 // 初期化
 function initializeData() {
   if (!fs.existsSync(DATA_FILE)) {
@@ -88,12 +85,6 @@ app.post("/webhook", async (req, res) => {
       let coins = await readFileWithTimeout(COINS_FILE);
       let keywords = await readFileWithTimeout(KEYWORDS_FILE);
       let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
-
-      // ブラックリストに登録されているユーザーからのメッセージを無視
-      if (blacklist.includes(userId)) {
-        console.log(`ユーザー ${userId} はブラックリストに登録されているため、メッセージを無視します。`);
-        return;
-      }
 
       // 1. キーワード応答とID応答
       if (keywords[message]) {
@@ -269,3 +260,50 @@ app.post("/webhook", async (req, res) => {
   }
   res.sendStatus(200);
 });
+
+// Helper Functions
+async function reply(replyToken, message) {
+  await axios.post('https://api.line.me/v2/bot/message/reply', {
+    replyToken,
+    messages: [{ type: 'text', text: message }]
+  }, {
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+  });
+}
+
+function slotMachine() {
+  const symbols = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  return `${symbols[Math.floor(Math.random() * 9)]}${symbols[Math.floor(Math.random() * 9)]}${symbols[Math.floor(Math.random() * 9)]}`;
+}
+
+function getSlotReward(result) {
+  const rewards = {
+    '111': 100,
+    '222': 100,
+    '333': 100,
+    '444': 100,
+    '555': 100,
+    '666': 100,
+    '888': 100,
+    '999': 100,
+    '777': 777
+  };
+  return rewards[result] || 0;
+}
+
+function lottery() {
+  const outcomes = ['大吉', '中吉', '小吉', '凶'];
+  return outcomes[Math.floor(Math.random() * outcomes.length)];
+}
+
+async function leaveGroup() {
+  // グループ退出処理
+}
+
+async function deleteMessage(msgId) {
+  await axios.post('https://api.line.me/v2/bot/message/' + msgId + '/delete', {}, {
+    headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+  });
+}
+
+app.listen(3000, () => console.log('Server is running on port 3000'));
