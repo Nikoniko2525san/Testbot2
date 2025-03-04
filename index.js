@@ -110,66 +110,97 @@ app.post("/webhook", async (req, res) => {
         await reply(replyToken, `あなたのIDは: ${userId}`);
       }
 
-      // 4. コインと送るとその人の残コインを送る
-      if (message === 'コイン') {
-        const userCoins = coins[userId] || 0;
-        await reply(replyToken, `あなたの残りコインは: ${userCoins}`);
-      }
+      // 4. // スロットの結果を生成する仮の関数
+const slotMachine = () => {
+  const outcomes = ['111', '222', '333', '444', '555', '666', '777', '888', '999'];
+  const randomIndex = Math.floor(Math.random() * outcomes.length);
+  return outcomes[randomIndex];
+};
 
-      // 5. スロット
-      if (message === 'スロット') {
-        const userCoins = coins[userId] || 0;
-        if (userCoins >= 1) {
-          coins[userId] = userCoins - 1; // コインを消費
-          const result = slotMachine();
-          const reward = getSlotReward(result);
-          if (reward) {
-            coins[userId] += reward;
-            await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${coins[userId]}`);
-          } else {
-            await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${coins[userId]}`);
-          }
-          writeFileWithTimeout(COINS_FILE, coins);
-        } else {
-          await reply(replyToken, 'コインが足りません。最高者にコインの付与を依頼してください。');
-        }
-      }
+// スロットの結果に基づいた報酬を計算する仮の関数
+const getSlotReward = (result) => {
+  switch (result) {
+    case '777':
+      return 777;
+    case '111':
+    case '222':
+    case '333':
+    case '444':
+    case '555':
+    case '666':
+    case '888':
+    case '999':
+      return 100;
+    default:
+      return 0;
+  }
+};
 
-      // 6-11. 最高者専用コマンド
-      if (userId === adminUserId) {
-        // ⑥ 個人にコインを付与
-        if (message.startsWith('coingive:')) {
-          const [_, targetUserId, amount] = message.split(':');
-          coins[targetUserId] = (coins[targetUserId] || 0) + parseInt(amount);
-          await reply(replyToken, `ユーザー ${targetUserId} に ${amount} コインを付与しました。`);
-          writeFileWithTimeout(COINS_FILE, coins);
-        }
-        // ⑦ 全てのコインを付与
-        if (message.startsWith('allcoingive:')) {
-          const amount = message.split(':')[1];
-          for (const user in coins) {
-            coins[user] += parseInt(amount);
-          }
-          await reply(replyToken, `全てのユーザーに ${amount} コインを付与しました。`);
-          writeFileWithTimeout(COINS_FILE, coins);
-        }
-        // ⑧ 個人にコインを剥奪
-        if (message.startsWith('coinnotgive:')) {
-          const [_, targetUserId, amount] = message.split(':');
-          coins[targetUserId] = (coins[targetUserId] || 0) - parseInt(amount);
-          await reply(replyToken, `ユーザー ${targetUserId} から ${amount} コインを剥奪しました。`);
-          writeFileWithTimeout(COINS_FILE, coins);
-        }
-        // ⑨ 全てのコインを剥奪
-        if (message.startsWith('allcoinnotgive:')) {
-          const amount = message.split(':')[1];
-          for (const user in coins) {
-            coins[user] -= parseInt(amount);
-          }
-          await reply(replyToken, `全てのユーザーから ${amount} コインを剥奪しました。`);
-          writeFileWithTimeout(COINS_FILE, coins);
-        }
-        // 10. 権限を付与
+// 4. コインと送るとその人の残コインを送る
+if (message === 'コイン') {
+  const userCoins = coins[userId] || 0;
+  await reply(replyToken, `あなたの残りコインは: ${userCoins}`);
+}
+
+// 5. スロット
+if (message === 'スロット') {
+  let userCoins = coins[userId] || 0;
+  if (userCoins >= 1) {
+    userCoins -= 1; // コインを消費
+    const result = slotMachine();
+    const reward = getSlotReward(result);
+    if (reward > 0) {
+      userCoins += reward;
+      await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${userCoins}`);
+    } else {
+      await reply(replyToken, `スロット結果: ${result}\nあなたの残りコインは: ${userCoins}`);
+    }
+    coins[userId] = userCoins; // ユーザーのコインを更新
+    await writeFileWithTimeout(COINS_FILE, JSON.stringify(coins)); // コイン情報をファイルに保存
+  } else {
+    await reply(replyToken, 'コインが足りません。最高者にコインの付与を依頼してください。');
+  }
+}
+
+// 6-11. 最高者専用コマンド
+if (userId === adminUserId) {
+  // ⑥ 個人にコインを付与
+  if (message.startsWith('coingive:')) {
+    const [_, targetUserId, amount] = message.split(':');
+    coins[targetUserId] = (coins[targetUserId] || 0) + parseInt(amount);
+    await reply(replyToken, `ユーザー ${targetUserId} に ${amount} コインを付与しました。`);
+    await writeFileWithTimeout(COINS_FILE, JSON.stringify(coins)); // コイン情報をファイルに保存
+  }
+
+  // ⑦ 全てのコインを付与
+  if (message.startsWith('allcoingive:')) {
+    const amount = parseInt(message.split(':')[1]);
+    for (const user in coins) {
+      coins[user] += amount;
+    }
+    await reply(replyToken, `全てのユーザーに ${amount} コインを付与しました。`);
+    await writeFileWithTimeout(COINS_FILE, JSON.stringify(coins)); // コイン情報をファイルに保存
+  }
+
+  // ⑧ 個人にコインを剥奪
+  if (message.startsWith('coinnotgive:')) {
+    const [_, targetUserId, amount] = message.split(':');
+    coins[targetUserId] = (coins[targetUserId] || 0) - parseInt(amount);
+    await reply(replyToken, `ユーザー ${targetUserId} から ${amount} コインを剥奪しました。`);
+    await writeFileWithTimeout(COINS_FILE, JSON.stringify(coins)); // コイン情報をファイルに保存
+  }
+
+  // ⑨ 全てのコインを剥奪
+  if (message.startsWith('allcoinnotgive:')) {
+    const amount = parseInt(message.split(':')[1]);
+    for (const user in coins) {
+      coins[user] -= amount;
+    }
+    await reply(replyToken, `全てのユーザーから ${amount} コインを剥奪しました。`);
+    await writeFileWithTimeout(COINS_FILE, JSON.stringify(coins)); // コイン情報をファイルに保存
+  }
+}
+// 10. 権限を付与
         if (message.startsWith('権限付与:')) {
           const targetUserId = message.split(':')[1];
           data[targetUserId] = '権限者';
