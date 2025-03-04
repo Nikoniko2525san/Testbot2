@@ -86,6 +86,13 @@ app.post("/webhook", async (req, res) => {
       let keywords = await readFileWithTimeout(KEYWORDS_FILE);
       let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
 
+      // 2. ブラックリストに登録されているかをチェック
+      if (blacklist.includes(userId)) {
+        // ブラックリストに含まれている場合、何もせずに処理を終了
+        console.log(`ユーザー ${userId} はブラックリストに登録されています`);
+        return res.sendStatus(200);  // 応答として200を返して終了
+      }
+
       // 1. キーワード応答とID応答
       if (keywords[message]) {
         await reply(replyToken, keywords[message]);
