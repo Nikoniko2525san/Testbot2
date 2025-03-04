@@ -2,7 +2,25 @@ const ACCESS_TOKEN = 'scim9t3j5eY+OB6O0hgo32s1olzFkxqC0f2U7CWcy30k1R3orR5uNc+dis
 
 const express = require("express");
 const axios = require("axios");
-const fs = require("fs");
+// fsの重複インポートを削除
+// const fs = require('fs');  // 既にインポートされている場合はコメントアウト
+
+function readFileWithTimeout(filePath, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`File read timeout: ${filePath}`)), timeout);
+
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      clearTimeout(timer);
+      if (err) return reject(new Error(`Error reading file ${filePath}: ${err.message}`));
+
+      try {
+        resolve(JSON.parse(data));
+      } catch (parseErr) {
+        reject(new Error(`Error parsing JSON from file ${filePath}: ${parseErr.message}`));
+      }
+    });
+  });
+}
 
 const app = express();
 app.use(express.json());
