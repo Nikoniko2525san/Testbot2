@@ -111,13 +111,6 @@ app.post("/webhook", async (req, res) => {
       let keywords = await readFileWithTimeout(KEYWORDS_FILE);
       let blacklist = await readFileWithTimeout(BLACKLIST_FILE);
 
-      // 他の処理（例: メッセージ返信など）
-    } catch (error) {
-      console.error('エラーが発生しました:', error);
-      await reply(replyToken, '処理中にエラーが発生しました。もう一度試してください。');
-    }
-  }
-});
   // その他の処理
 } catch (error) {
   console.error('エラーが発生しました:', error);
