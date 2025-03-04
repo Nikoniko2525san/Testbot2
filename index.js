@@ -32,14 +32,21 @@ function initializeData() {
   }
 }
 
-// ファイル読み込み関数にタイムアウト処理を追加
+const fs = require('fs');
+
 function readFileWithTimeout(filePath, timeout = 5000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject('File read timeout'), timeout);
+    const timer = setTimeout(() => reject(new Error(`File read timeout: ${filePath}`)), timeout);
+
     fs.readFile(filePath, 'utf8', (err, data) => {
       clearTimeout(timer);
-      if (err) return reject(err);
-      resolve(JSON.parse(data));
+      if (err) return reject(new Error(`Error reading file ${filePath}: ${err.message}`));
+
+      try {
+        resolve(JSON.parse(data));
+      } catch (parseErr) {
+        reject(new Error(`Error parsing JSON from file ${filePath}: ${parseErr.message}`));
+      }
     });
   });
 }
