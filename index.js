@@ -315,14 +315,13 @@ if (userId === adminUserId) {
         await deleteMessage(msgId);
         await reply(replyToken, `メッセージ ${msgId} を削除しました。`);
       }
-
-    } catch (err) {
-      console.error('Error:', err);
-      await reply(replyToken, 'エラーが発生しました。');
-    }
-  }
-  res.sendStatus(200);
-});
+      
+} catch (err) {
+  console.error('Error:', err);
+  await reply(replyToken, 'エラーが発生しました。');
+} finally {
+  res.sendStatus(200);  // 成功でも失敗でも必ず200を返す
+}
 
 // Helper Functions
 async function reply(replyToken, message) {
