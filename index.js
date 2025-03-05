@@ -315,14 +315,14 @@ if (userId === adminUserId) {
         await deleteMessage(msgId);
         await reply(replyToken, `メッセージ ${msgId} を削除しました。`);
       }
-      
-} catch (err) {
+      } catch (err) {
+  // エラーが発生した場合に実行される部分
   console.error('Error:', err);
   await reply(replyToken, 'エラーが発生しました。');
 } finally {
-  res.sendStatus(200);  // 成功でも失敗でも必ず200を返す
+  // 処理が完了した後、必ず実行される部分
+  res.sendStatus(200);
 }
-
 // Helper Functions
 async function reply(replyToken, message) {
   await axios.post('https://api.line.me/v2/bot/message/reply', {
